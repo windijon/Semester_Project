@@ -1,0 +1,260 @@
+---
+title: "Johannes_Test_Area"
+output: html_document
+---
+
+
+### Load the necessary libraries.
+
+```{r message = FALSE, warning=FALSE}
+
+library(devtools)
+library(ComputationalMovementAnalysisData)
+library(ggplot2)
+library(readr)
+library(dplyr)
+library(terra)
+library(sf)
+library(tmap)
+library(SimilarityMeasures)
+library(lubridate)
+
+```
+
+
+### Import the Data.
+
+```{r message = FALSE, warning=FALSE}
+install_github("ComputationalMovementAnalysis/ComputationalMovementAnalysisData")
+```
+
+
+```{r message = FALSE, warning=FALSE}
+head(wildschwein_BE)
+head(wildschwein_metadata)
+head(wildschwein_overlap_temp)
+head(schreck_agenda)
+head(schreck_locations)
+
+write.csv(wildschwein_BE, file = "wildschwein_BE.csv")
+write.csv(wildschwein_metadata, file = "wildschwein_metadata.csv")
+write.csv(wildschwein_overlap_temp, file = "wildschwein_overlap_temp.csv")
+write.csv(schreck_agenda, file = "schreck_agenda.csv")
+write.csv(schreck_locations, file = "schreck_locations.csv")
+
+```
+
+```{r}
+library(ComputationalMovementAnalysisData)
+library(ggplot2)
+library(dplyr)
+library(forcats)
+
+limits <- c(0,200)
+breaks = seq(0,200,50)
+labels = paste(c(rep("",length(breaks)-1),">"), breaks)
+
+view(wildschwein_BE) 
+
+
+wildschwein_BE %>%
+  mutate(TierName = fct_reorder(TierName, DatetimeUTC,min, .desc = TRUE)) %>%
+  group_by(TierID, TierName, CollarID) %>%
+  mutate(
+    timelag = as.numeric(difftime(lead(DatetimeUTC),DatetimeUTC, units = "mins")),
+    ) %>%
+  ggplot(aes(DatetimeUTC, TierName, colour = timelag)) +
+  geom_line(lwd = 10) +
+  scale_color_gradientn(name = "Sampling interval", colours = RColorBrewer::brewer.pal(11, "Spectral"), limits = limits, na.value = NA, oob = scales::squish, breaks = seq(0,200,50), labels = labels) +
+  theme_minimal() +
+  theme(legend.position = "top") +
+  guides(color = guide_colorbar(title.position = "top", title.hjust = .5, barwidth = unit(20, "lines"), barheight = unit(.5, "lines")))
+```
+
+-----------------------------------------------------
+
+
+loading needed libraries 
+```{r}
+
+# Include tables with the function "kable"
+
+knitr::kable(head(wildschwein_BE))
+```
+
+loading all Wildboar Data (n=4)
+Sabi, Rosa, Ruth, Caro
+```{r}
+
+
+# loading .tif-dateien
+
+
+#Beispieldaten <- terra::rast("Beispieldaten.tif")
+#plot(Beispieldaten)
+```
+
+
+Adding background maps
+```{r}
+
+tmap_mode("view") +
+tm_shape(pk100_BE) + 
+  tm_rgb() +
+  plot(Beispieldaten)
+```
+
+```{r}
+ws_be <- read_csv("wildschwein_BE_2056.csv")
+
+ws_be_sf <- st_as_sf(ws_be, coords = c("E", "N"), crs = 2056, remove = FALSE)
+
+
+caro <- read_csv("caro60.csv")
+
+```
+
+
+joining caro + Sabi, Rosa, Ruth
+```{r}
+
+wildschweine(n=4) <- full_join(ws_be,caro,by = "gemeinsamkeit_bspw_Zeit")
+
+
+```
+
+Spliting wildboar data in wildboar individuals e.g.: Rosa and Sabi
+```{r}
+library(tidyverse)
+ws %>% filter(TierName == "Sabi") -> ws_sabi2
+ws %>% filter(TierName == "ruth") -> ws_ruth
+ws %>% filter(TierName == "Rosa") -> ws_rosa
+inner_join(ws_sabi, ws_rosa, by = "dt_rounded", suffix = c("_sabi", "_rosa")) %>% 
+      mutate(distance = sqrt((E_sabi - E_rosa)^2 + (N_sabi - N_rosa)^2),
+           meet = distance < 100) -> ws_join
+```
+
+
+
+
+--> How many individuals were tracked?
+--> For which timesequence do we have comparable Data? 
+--> average intervals? --> Making it comparable
+
+  ```{r}
+ws_be_sf %>% 
+  st_drop_geometry() %>% 
+  group_by(TierID, TierName) %>% 
+  summarise(pings = n(),
+            start_time = min(DatetimeUTC), 
+            end_time = max(DatetimeUTC),
+            avg_interval = mean(timelag, na.rm = T),
+            total_tracking_time = sum(timelag, na.rm = T)) %>% 
+  mutate(tracking_time_days = days(day(seconds_to_period(total_tracking_time)))) 
+
+
+# average intervals
+ws %>% 
+  mutate(dt_rounded = round_date(DatetimeUTC, unit = "15 minutes")) -> ws 
+
+```
+
+
+
+Deriving movement parametern: Speed in meters per second
+
+```{r}
+ws_be_sf %>% 
+  mutate(steplength = sqrt((E - lead(E,1))^2 + (N - lead(N,1))^2),
+         speed = steplength/timelag)
+```
+
+
+
+
+## Specifying temporal windows
+Our sampling interval is 1 minute - if we take a temporal window of 6 minutes we use a window size of 6 positions. Therefore that's 3 plus and 3 minus.
+```{r}
+caro %>% 
+  mutate(
+    nMinus3 = sqrt((lag(E,3)-E)^2 + (lag(N,3)-N)^2),
+    nMinus2 = sqrt((lag(E,2)-E)^2+(lag(N,2)-N)^2),  
+    nMinus1 = sqrt((lag(E,1)-E)^2+(lag(N,1)-N)^2),
+    nPlus1  = sqrt((E-lead(E,1))^2+(N-lead(N,1))^2), 
+    nPlus2  = sqrt((E-lead(E,2))^2+(N-lead(N,2))^2),  
+    nPlus3  = sqrt((E-lead(E,3))^2+(N-lead(N,3))^2)  
+) -> caro
+caro %>% 
+  rowwise() %>% 
+  mutate(
+    stepMean = mean(c(nMinus3, nMinus2, nMinus1, nPlus1, nPlus2, nPlus3))
+  ) %>% 
+  ungroup() -> caro
+```
+
+
+<!-- the following is just a placeholder text, remove it!-->
+Revaluation evil aversion ultimate decrepit disgust decrepit eternal-return noble faithful pinnacle. Truth ascetic inexpedient decrepit free. Ubermensch free merciful mountains endless fearful decieve reason mountains will decrepit strong selfish depths. Overcome faith snare gains oneself transvaluation.
+
+
+
+
+```{r}
+# include plots automatically
+
+ggplot(schreck_locations, aes(E, N)) +
+  geom_point() +
+  coord_map()
+
+```
+
+
+
+# Data exploration
+```{r}
+ws %>% 
+  group_by("ruth") %>% 
+  summarise(n = n())
+
+summary("ruth")
+
+str("ruth")
+
+ggplot(ws) + geom_sf()
+tm_shape(ws) + tm_dots(col = "ruth")
+
+view(ws)
+
+ggplot(caro) +
+  geom_histogram(aes(stepMean), bins = 60) + geom_vline(xintercept = 4, color = "red")
+summary(caro$stepMean)
+``` 
+
+
+# Visualisation of the spatio-temporal patterns
+# Visualizing the percentage of samples in a given location
+```{r}
+ggplot(wildboar) +
+  geom_polar(aes(rough_location))
+
+#--> Excercise 5!!
+
+``` 
+
+# Visualization of activity patterns // maybe related to spatial context
+
+```{r}
+  wildboar %>%
+    count(time, location) %>%
+    ggplot(mapping = aes(x = time, y = location)) +
+    geom_tile(mapping = aes(speed))
+
+
+diamonds %>%
+count(color, cut) %>%
+ggplot(mapping = aes(x = color, y = cut)) +
+geom_tile(mapping = aes(fill = n))
+
+
+  
+``` 
