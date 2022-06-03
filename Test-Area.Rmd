@@ -96,7 +96,7 @@ write.csv(schreck_locations, file = "schreck_locations.csv")
 tm_shape(shp = wildschwein_BE_sf) + 
     tm_dots(col = "TierName")
 
-b<- tm_shape(shp = orthophoto) + 
+b<- tm_shape(shp = Orthophoto) + 
   tm_rgb()
 tmap_save(tm = b, filename = "b.pdf", width = 17, height = 14, units = "cm", dpi = 5000)
 
