@@ -72,7 +72,7 @@ limits <- c(0,200)
 breaks = seq(0,200,50)
 labels = paste(c(rep("",length(breaks)-1),">"), breaks)
 
-wildschwein_BE %>%
+ws %>%
   mutate(TierName = fct_reorder(TierName, DatetimeUTC,min, .desc = TRUE)) %>%
   group_by(TierID, TierName, CollarID) %>%
   mutate(
@@ -150,38 +150,116 @@ knitr::kable(head(wildschwein_BE))
 
 
 Spliting wildboar data in wildboar individuals 
+Reason all are being tracked in the same time period: around 2015-01
 ```{r}
 library(tidyverse)
-ws_be_sf %>% filter(TierName == "Sabi") -> sabi
-ws_be_sf %>% filter(TierName == "Ruth") -> ruth
+ws_be_sf %>% filter(TierName == "Sabine") -> sabine
+ws_be_sf %>% filter(TierName == "Nicole") -> nicole
+ws_be_sf %>% filter(TierName == "Caroline") -> caroline
+ws_be_sf %>% filter(TierName == "Isabelle") -> isabelle
 ws_be_sf %>% filter(TierName == "Rosa") -> rosa
-ws_be_sf %>% filter(TierName == "Miriam") -> miriam
-ws_be_sf %>% filter(TierName == "Fritz") -> fritz
-ws_be_sf %>% filter(TierName == "Caro") -> caro
+ws_be_sf %>% filter(TierName == "Ruth") -> ruth
+ws_newyear_speed %>% filter(TierName == "Fritz") -> fritz
+
+view(fritz)
 
 
-
-
-inner_join(ws_sabi, ws_rosa, by = "dt_rounded", suffix = c("_sabi", "_rosa")) %>% 
+inner_join(sabine, nicole, caroline, isabelle, rosa, ruth, fritz, by = "dt_rounded", suffix = c("_sabi", "_rosa")) %>% 
       mutate(distance = sqrt((E_sabi - E_rosa)^2 + (N_sabi - N_rosa)^2),
            meet = distance < 100) -> ws_join
 ```
 
 
-Making Data comparable
+
+# Task 2: Annotate Trajectories
+Filter to winter
+```{r}
+ws_be_sf %>% 
+  filter(DatetimeUTC >= as.Date("2014-12-15") & DatetimeUTC < as.Date("2015-01-015")) -> ws_newyear
+
+ws_newyear <- as.numeric(ws_newyear(DatetimeUTC))
+
+#date time rounden 
+
+ws_newyear <- ws_newyear %>%
+  group_by(TierID) %>%
+  mutate(
+    DatetimeRound = lubridate::as.numeric:round_date(DatetimeUTC,"15 minutes")
+  )
+
+# warum funktioniert es nicht?
+
+head(ws_newyear)
+view(ws_newyear)
+summarise(ws_newyear)
+```
+
+
+Making Data comparable via unit = 1 day / 1 hour / 1 week if needed
+
++ deriving speed via summarise(speed_mean = mean(speed))
+
 1. rounding dates
 ```{r}
-# average intervals
-fritz %>% 
-  mutate(dt_rounded = as.numeric(round_date(DatetimeUTC, unit = "15 minutes")) -> roundet_fritz
-
-mutate(timelag = as.numeric(difftime(lead(DatetimeUTC),DatetimeUTC,units = "secs")))
 
 
+# funktioniert!!!
 
-fritz_timelag <- mutate(fritz,timelag = as.numeric(difftime(lead(DatetimeUTC),DatetimeUTC)))
+# without Geometry
+ws_newyear_speed %>%
+  st_drop_geometry() %>%
+  mutate(datetime_round = lubridate::round_date(as.POSIXct(DatetimeUTC),unit = "1 day")) %>%
+  group_by(TierID, datetime_round) %>%
+  summarise(speed_mean = mean(speed)) -> ws_newyear_speed_day
 
-head(fritz)
+# for steplegth
+ws_newyear_speed_day_geometry %>%
+  st_drop_geometry() %>%
+  mutate(datetime_round = lubridate::round_date(as.POSIXct(DatetimeUTC),unit = "1 day")) %>%
+  group_by(TierID, datetime_round) %>%
+  summarise(steplegth_mean = mean(steplength)) -> ws_newyear_steplength_day
+
+view(ws_newyear_steplength_day)
+
+# with Geometry
+ws_newyear_speed %>%
+  mutate(datetime_round = lubridate::round_date(as.POSIXct(DatetimeUTC),unit = "1 day")) %>%
+  group_by(TierID, datetime_round, E, N) -> ws_newyear_speed_day_geometry
+
+view(ws_newyear_speed_day_geometry)
+
+
+# moving window approach
+ws_newyear_speed_mean %>% 
+  head(100) %>%
+  mutate(rollmean = zoo::rollmean(speed_mean, 5, fill = NA, align = "center")) %>%
+  ggplot(aes(datetime_round)) +
+  geom_line(aes(y = speed_mean, colour = "speedmean")) +
+  #geom_point(aes(y = speed_mean)) +
+  geom_line(aes(y = rollmean, colour = "rollmean"))
+  
+
+#same as steplegth
+ws_newyear_roll <- ws_newyear_speed_day_geometry %>%
+  mutate(
+    net_displacement = sqrt((E-lead(E, 20))^2+(N-lead(N, 20))^2)
+  )
+
+
+view(ws_newyear_roll)
+
+# funktioniert nicht??
+# funktioniert nicht??
+# funktioniert nicht??
+
+ggplot(ws_newyear_steplength_day, aes(datetime_round, steplength_mean, colour=TierID)) + geom_point()  
+  
+
+
+view(ws_newyear_roll)
+view(ws_newyear)
+
+
 
 ```
 
@@ -190,21 +268,23 @@ Deriving Speed
 ```{r}
 # task 1 ########################################################################
 
-fritz <- fritz %>%
+ws_newyear <- ws_newyear %>%
   mutate(timelag = as.numeric(difftime(lead(DatetimeUTC),DatetimeUTC,units = "mins")))
 
-head(fritz)
-ggplot(fritz_timelag, aes(DatetimeUTC,TierID)) +
+view(ws_newyear)
+
+head(ws_newyear)
+
+ggplot(ws_newyear, aes(DatetimeUTC,TierID)) +
   geom_line()
 
-ggplot(fritz, aes(timelag)) +
+ggplot(ws_newyear, aes(timelag)) +
   geom_histogram(binwidth = 50) +
   lims(x = c(0,15000)) +
   scale_y_log10()
 
 
-fritz %>%
-  filter(year(DatetimeUTC)  == 2015) %>%
+ws_newyear %>%
   ggplot(aes(DatetimeUTC,timelag, colour = TierID)) +
   geom_line() +
   geom_point()
@@ -212,49 +292,49 @@ fritz %>%
 
 # task 2 ########################################################################
 
-fritz <- fritz %>%
+ws_newyear <- ws_newyear %>%
   group_by(TierID) %>%
   mutate(
     steplength = sqrt((E-lead(E))^2+(N-lead(N))^2)
   )
 
 
-fritz <- fritz %>%
+ws_newyear_speed <- ws_newyear %>%
   group_by(TierID) %>%
   mutate(
     speed = steplength/timelag
   )
 
-view(fritz)
+view(ws_newyear_speed)
 
 # task 3 ########################################################################
 
 
-fritz[seq(1, nrow(fritz),3), ]
+ws_newyear_speed[seq(1, nrow(ws_newyear_speed),3), ]
 
-fritz_3 <- fritz[seq(1, nrow(fritz),3), ]
+ws_newyear_speed_3 <- ws_newyear_speed[seq(1, nrow(ws_newyear_speed),3), ]
 
-fritz_6 <- fritz[seq(1, nrow(fritz),6), ]
+ws_newyear_speed_6 <- ws_newyear_speed[seq(1, nrow(ws_newyear_speed),6), ]
 
-fritz_9 <- fritz[seq(1, nrow(fritz),9), ]
+ws_newyear_speed_9 <- ws_newyear_speed[seq(1, nrow(ws_newyear_speed),9), ]
 
 
 
-fritz <- fritz %>%
+ws_newyear_speed <- ws_newyear_speed %>%
   mutate(
     timelag = as.numeric(difftime(lead(DatetimeUTC),DatetimeUTC,units = "secs")),
     steplength = sqrt((E-lead(E))^2+(N-lead(N))^2),
     speed = steplength/timelag
   )
 
-fritz_3 <- fritz_3 %>%
+ws_newyear_speed_3 <- ws_newyear_speed_3 %>%
   mutate(
     timelag = as.numeric(difftime(lead(DatetimeUTC),DatetimeUTC,units = "secs")),
     steplength = sqrt((E-lead(E))^2+(N-lead(N))^2),
     speed = steplength/timelag
   )
 
-fritz_6 <- fritz_6 %>%
+ws_newyear_speed_6 <- ws_newyear_speed_6 %>%
   mutate(
     timelag = as.numeric(difftime(lead(DatetimeUTC),DatetimeUTC,units = "secs")),
     steplength = sqrt((E-lead(E))^2+(N-lead(N))^2),
@@ -262,7 +342,7 @@ fritz_6 <- fritz_6 %>%
   )
 
 
-fritz_9 <- fritz_9 %>%
+ws_newyear_speed_9 <- ws_newyear_speed_9 %>%
   mutate(
     timelag = as.numeric(difftime(lead(DatetimeUTC),DatetimeUTC,units = "secs")),
     steplength = sqrt((E-lead(E))^2+(N-lead(N))^2),
@@ -271,10 +351,10 @@ fritz_9 <- fritz_9 %>%
 
 
 ggplot() +
-  geom_point(data = fritz, aes(E,N, colour = "1 minute"), alpha = 0.2) +
-  geom_path(data = fritz, aes(E,N, colour = "1 minute"), alpha = 0.2) +
-  geom_point(data = fritz_3, aes(E,N, colour = "3 minutes")) +
-  geom_path(data = fritz_3, aes(E,N, colour = "3 minutes")) +
+  geom_point(data = ws_newyear_speed, aes(E,N, colour = "1 minute"), alpha = 0.2) +
+  geom_path(data = ws_newyear_speed, aes(E,N, colour = "1 minute"), alpha = 0.2) +
+  geom_point(data = ws_newyear_speed_3, aes(E,N, colour = "3 minutes")) +
+  geom_path(data = ws_newyear_speed_3, aes(E,N, colour = "3 minutes")) +
   labs(color="Trajectory", title = "Comparing original- with 3 minutes-resampled data")  +
   theme_minimal()
 
@@ -297,12 +377,13 @@ ggplot() +
 view(fritz_9)
 
 ggplot() +
-  geom_line(data = fritz, aes(DatetimeUTC,speed, colour = "1 minute")) +
-  geom_line(data = fritz_3, aes(DatetimeUTC,speed, colour = "3 minutes")) +
-  geom_line(data = fritz_6, aes(DatetimeUTC,speed, colour = "6 minutes")) +
-  geom_line(data = fritz_9, aes(DatetimeUTC,speed, colour = "9 minutes")) +
+  geom_line(data = ws_newyear_speed, aes(DatetimeUTC,speed, colour = "1 minute")) +
+  geom_line(data = ws_newyear_speed_3, aes(DatetimeUTC,speed, colour = "3 minutes")) +
+  geom_line(data = ws_newyear_speed_6, aes(DatetimeUTC,speed, colour = "6 minutes")) +
+  geom_line(data = ws_newyear_speed_9, aes(DatetimeUTC,speed, colour = "9 minutes")) +
   labs(x = "Time",y = "Speed (m/s)", title = "Comparing derived speed at different sampling intervals") +
   theme_minimal()
+
 
 
 # task 4 ########################################################################
@@ -315,16 +396,16 @@ rollmean(example,k = 4,fill = NA,align = "left")
 
 
 
-fritz_mean <- fritz %>%
+ws_summer_new <- ws_summer %>%
   mutate(
     speed3 = rollmean(speed,3,NA,align = "left"),
     speed6 = rollmean(speed,6,NA,align = "left"),
     speed9 = rollmean(speed,9,NA,align = "left")
   )
 
-view(fritz)
+head(ws_summer_new)
 
-fritz_mean %>%
+ws_summer_new %>%
   ggplot() +
   geom_line(aes(DatetimeUTC,speed), colour = "#E41A1C") +
   geom_line(aes(DatetimeUTC,speed3), colour = "#377EB8") +
@@ -335,9 +416,105 @@ fritz_mean %>%
 
 
 Durchschnittsgeschwindigkeit errechnen!
+
 ```{r}
 
-fritz
+mean(fritz$speed)
+
+library(dplyr)
+
+fritz %>%
+  group_by(DatetimeUTC = days(1)) %>%
+  summarise_at(vars(col_to_aggregate), list(name = mean))
+
+is.numeric(fritz$speed)
+
+
+library(readr)
+library(dplyr)
+library(ggplot2)
+
+
+
+fritz <- fritz %>%
+  mutate(
+    stepMean = rowMeans(                       
+      cbind(                                   
+        sqrt((lag(E,3)-E)^2+(lag(E,3)-E)^2),   
+        sqrt((lag(E,2)-E)^2+(lag(E,2)-E)^2),   
+        sqrt((lag(E,1)-E)^2+(lag(E,1)-E)^2),   
+        sqrt((E-lead(E,1))^2+(E-lead(E,1))^2),  
+        sqrt((E-lead(E,2))^2+(E-lead(E,2))^2),
+        sqrt((E-lead(E,3))^2+(E-lead(E,3))^2)  
+        )                                        
+    )
+  )
+
+# Note: 
+# We present here a slightly different approach as presented in the input:
+# - cbind() creates a matrix with the same number of rows as the original dataframe
+# - It has 6 columns, one for each Euclidean distance calculation
+# - rowMeans() returns a single vector with the same number of rows as the original dataframe
+
+
+# task 2 ########################################################################
+
+summary(fritz$stepMean)
+
+ggplot(fritz, aes(stepMean)) +
+  geom_histogram(binwidth = 1) +
+  geom_vline(xintercept = mean(fritz$stepMean,na.rm = TRUE))
+
+fritz <- fritz %>%
+  mutate(
+    static = stepMean < mean(fritz$stepMean,na.rm = TRUE)
+  ) 
+
+view(fritz)
+
+# task 3 ########################################################################
+
+fritz %>%
+  ggplot() +
+  geom_path(aes(E,N), alpha = 0.5) +
+  geom_point(aes(E,N,colour = static)) +
+  theme_minimal() +
+  coord_equal()
+
+
+
+
+# task 4 ########################################################################
+
+fritz <-fritz %>%
+  mutate(
+    segment_ID = rle_id(static)
+  )
+
+caro60_moves <- caro60 %>%
+  filter(!static)
+
+
+p1 <- ggplot(caro60_moves, aes(E, N, color = segment_ID)) +
+  geom_point() +
+  geom_path() +
+  coord_equal() +
+  theme(legend.position = "none") +
+  labs(subtitle =  "All segments (uncleaned)")
+
+
+p2 <- caro60_moves %>%
+  group_by(segment_ID) %>%
+  mutate(duration = as.integer(difftime(max(DatetimeUTC),min(DatetimeUTC),"mins"))) %>%
+  filter(duration > 5) %>%
+  ggplot(aes(E, N, color = segment_ID))+
+  # geom_point(data = caro60, color = "black") +
+  geom_point() +
+  geom_path() +
+  coord_equal() +
+  theme(legend.position = "none") +
+  labs(subtitle = "Long segments (removed segements <5 minutes)")
+
 
 ```
 
@@ -390,7 +567,7 @@ ggplot(data = ws_be_sf, aes(x=TierID, y = timelag)) +
 ## Specifying temporal windows
 Our sampling interval is 1 minute - if we take a temporal window of 6 minutes we use a window size of 6 positions. Therefore that's 3 plus and 3 minus.
 ```{r}
-ws_be_sf %>% 
+ws_summer %>% 
   mutate(
     nMinus3 = sqrt((lag(E,3)-E)^2 + (lag(N,3)-N)^2),
     nMinus2 = sqrt((lag(E,2)-E)^2+(lag(N,2)-N)^2),  
@@ -398,33 +575,28 @@ ws_be_sf %>%
     nPlus1  = sqrt((E-lead(E,1))^2+(N-lead(N,1))^2), 
     nPlus2  = sqrt((E-lead(E,2))^2+(N-lead(N,2))^2),  
     nPlus3  = sqrt((E-lead(E,3))^2+(N-lead(N,3))^2)  
-) -> ws_be_sf_steps
+) -> ws_summer_steps
 
-view(ws_be_sf_steps)
+view(ws_summer_steps)
 
-ws_be_sf_steps %>% 
+ws_summer_steps %>% 
   rowwise() %>% 
   mutate(
     stepMean = mean(c(nMinus3, nMinus2, nMinus1, nPlus1, nPlus2, nPlus3))
   ) %>% 
-  ungroup() -> ws_be_sf_steps
+  ungroup() -> ws_summer_steps
+```
+
+Group by TierName
+Step_mean
+```{r}
+
 ```
 
 
 <!-- the following is just a placeholder text, remove it!-->
 Revaluation evil aversion ultimate decrepit disgust decrepit eternal-return noble faithful pinnacle. Truth ascetic inexpedient decrepit free. Ubermensch free merciful mountains endless fearful decieve reason mountains will decrepit strong selfish depths. Overcome faith snare gains oneself transvaluation.
 
-
-
-
-```{r}
-# include plots automatically
-
-ggplot(schreck_locations, aes(E, N)) +
-  geom_point() +
-  coord_map()
-
-```
 
 
 
@@ -459,24 +631,71 @@ ggplot(wildboar) +
 
 ``` 
 
+
 # Visualization of activity patterns // maybe related to spatial context
 
+First: Calculating Mean Steplengh
+Second: Plotting with geom_tile 
+y = TierName
+x = mean hours of the day
+fill = steplegth
+
 ```{r}
-  wildboar %>%
+#Example:
+  
+  diamonds %>%
+                     count(color, cut) %>%
+                     ggplot(mapping = aes(x = color, y = cut)) +
+                       geom_tile(mapping = aes(fill = n))
+
+
+  ws_newyear_speed %>%
     count(time, location) %>%
     ggplot(mapping = aes(x = time, y = location)) +
     geom_tile(mapping = aes(speed))
 
+fritz %>% 
+  filter(DatetimeUTC >= as.Date("2014-12-02") & DatetimeUTC < as.Date("2014-12-03")) -> fritz_12_02
 
-caro %>%
-count(DatetimeUTC, TierName) %>%
-ggplot(mapping = aes(x = DatetimeUTC, y = TierName)) +
-geom_tile(mapping = aes(fill = steplength))
+view(ws_newyear_steplength_day)
 
-view(caro)
+ws_newyear_steplength_day %>%
+count(datetime_round, TierID) %>%
+ggplot(mapping = aes(x = datetime_round, y = TierID)) +
+geom_tile(mapping = aes(fill = steplength_mean))
+
+# waruuum??
+
+# Fehler in FUN(X[[i]], ...) : Objekt 'speed' nicht gefunden
+
+view(fritz)
+
+ggplot(data = fritz, aes(x = DatetimeUTC, y = timelag, color = TierID)) +
+  geom_line()
+
+ggplot(data = ws_newyear_speed, aes(x=TierID, y = speed)) +
+  geom_boxplot()
 
 
 ``` 
+
+
+2.calculating mean speed of wildboar
+```{r}
+ws_summer <- ws_be_sf %>%
+  filter(month(DatetimeUTC) %in% 5:6)
+
+view(ws_summer_speed)
+
+
+ggplot(ws_summer_speed) +
+  geom_histogram(aes(stepMean), bins = 60) + geom_vline(xintercept = 4, color = "red")
+summary(ws_summer_speed$stepMean)
+
+ggplot(ws_newyear_speed) +
+  geom_boxplot(aes(speedMean), bins = 60 + geom_vline(xintercept = 4, color = "red"))
+
+```
 
 
 spatio-temporal patterns of all wild boar 
