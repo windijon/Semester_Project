@@ -1,0 +1,253 @@
+---
+title: "Johannes_final"
+output: html_document
+---
+
+
+### Loading libraries
+
+```{r message = FALSE, warning=FALSE}
+
+library(devtools)
+library(ComputationalMovementAnalysisData)
+library(ggplot2)
+library(readr)
+library(dplyr)
+library(terra)
+library(sf)
+library(tmap)
+library(SimilarityMeasures)
+library(lubridate)
+library(tibble)
+
+```
+
+
+### Importing Data
+
+```{r message = FALSE, warning=FALSE}
+install_github("ComputationalMovementAnalysis/ComputationalMovementAnalysisData")
+```
+
+### Analysing the data and its structure
+
+```{r message = FALSE, warning=FALSE}
+head(wildschwein_BE)
+head(wildschwein_metadata)
+head(wildschwein_overlap_temp)
+
+
+write.csv(wildschwein_BE, file = "wildschwein_BE.csv")
+write.csv(wildschwein_metadata, file = "wildschwein_metadata.csv")
+write.csv(wildschwein_overlap_temp, file = "wildschwein_overlap_temp.csv")
+
+```
+
+### Combining Cords
+
+```{r message = FALSE, warning=FALSE}
+
+ws <- read.csv("wildschwein_BE.csv")
+
+
+ws_be_sf <- st_as_sf(ws, coords = c("E", "N"), crs = 2056, remove = FALSE)
+
+```
+
+
+
+### Filter to the newyear-period of 2014-2015
+
+The Idea was to reduce the amount of data down to 7 wildboars and the timeperiod from the 2014-12-15 until the 2015-01-15. The result therefore is rather a simplified way to solve our question but  includes all the necessary means to answer this kind of question in a rather exemplary way. 
+```{r message = FALSE, warning=FALSE}
+
+ws_be_sf %>% 
+  filter(DatetimeUTC >= as.Date("2014-12-15") & DatetimeUTC < as.Date("2015-01-15")) -> ws_newyear
+
+```
+
+
+### Deriving Speed in order to derive a proxy of the most active or laziest wildboar
+```{r message = FALSE, warning=FALSE}
+
+ws_newyear <- ws_newyear %>%
+  mutate(timelag = as.numeric(difftime(lead(DatetimeUTC),DatetimeUTC,units = "mins")))
+
+
+ws_newyear_steplength <- ws_newyear %>%
+  group_by(TierName) %>%
+  mutate(
+    steplength = sqrt((E-lead(E))^2+(N-lead(N))^2)
+  )
+
+
+ws_newyear_speed <- ws_newyear_steplength %>%
+  group_by(TierName) %>%
+  mutate(
+    speed = steplength/timelag
+  )
+
+```
+
+
+ 
+### Deriving another proxy: net displacent
+```{r message = FALSE, warning=FALSE}
+# As another proxy of the most active or laziest wild boar we took the net displacement here: net_displacent
+
+ws_newyear_net_displacement <- ws_newyear %>%
+  mutate(
+    net_displacement = sqrt((E-lead(E, 20))^2+(N-lead(N, 20))^2)
+  )
+
+```
+
+
+In this case to decided to derive the mean speed and mean displacement in one day intervals 
+
+1. We roundet the date by days
+2. We grouped by TierName and datetime_round
+3. We derived the mean speed and displacement
+
+in this case without the geometry because of the reduced computational effort
+```{r message = FALSE, warning=FALSE}
+
+ws_newyear_speed %>%
+  st_drop_geometry() %>%
+  mutate(datetime_round = lubridate::round_date(as.POSIXct(DatetimeUTC),unit = "1 day")) %>%
+  group_by(TierName, datetime_round) %>%
+  summarise(speed_mean = mean(speed)) -> ws_newyear_speed_mean
+
+
+ws_newyear_steplength %>%
+  st_drop_geometry() %>%
+  mutate(datetime_round = lubridate::round_date(as.POSIXct(DatetimeUTC),unit = "1 day")) %>%
+  group_by(TierName, datetime_round) %>%
+  summarise(steplength_mean = mean(steplength)) -> ws_newyear_steplength_mean
+
+
+ws_newyear_net_displacement %>%
+  st_drop_geometry() %>%
+  mutate(datetime_round = lubridate::round_date(as.POSIXct(DatetimeUTC),unit = "1 day")) %>%
+  group_by(TierName, datetime_round) %>%
+  summarise(net_displacement = mean(net_displacement)) -> ws_newyear_net_displacement
+
+```
+
+
+### Moving window approach
+
+The Moving window approach in order to reduce noise of the data might be another approach to analyse i.e. speed_mean but was not further been elaborated in this project. The idea is to sum up in this case six and five mean variables like speed_mean to smooth out  movement peeks over the given timeperiod. This allows to visualize the movement patterns in a more trend driven way.
+```{r message = FALSE, warning=FALSE}
+
+# Here we can see the overall movements of the seven wild boar in a smooth out way (derived by the rollmean function) and the original speedmean.
+
+ws_newyear_speed_mean %>% 
+  head(100) %>%
+  mutate(rollmean = zoo::rollmean(speed_mean, 6, fill = NA, align = "center")) %>%
+  ggplot(aes(datetime_round)) +
+  geom_line(aes(y = speed_mean, colour = "speedmean")) +
+  #geom_point(aes(y = speed_mean)) +
+  geom_line(aes(y = rollmean, colour = "rollmean")) 
+
+# An idea would have been to derive the rollmean of the individuals and compare them among each other.
+# i.e.:
+ws_newyear_speed_mean %>% 
+  head(37) %>%
+  mutate(rollmean = zoo::rollmean(speed_mean, 5, fill = NA, align = "center")) %>%
+  ggplot(aes(datetime_round)) +
+  geom_line(aes(y = rollmean, colour = "TierName"))
+
+```
+
+
+
+### Visualization of activity patterns 
+
+First:      Calculating Mean Steplengh
+, Second:     Plotting with geom_tile 
+, Y =         TierName
+, X =         mean hours of the day
+, fill =      steplegth
+
+
+Core result of the question answered: which is the most active / laziest wildboar. The interpretation is still a vage idea of what "active" / "laziest" means but in thsi project we defined it as the most active wildboar over a certain timeperiod. The results show clear "winners" and "loosers" when having a look on the mean_speed and mean_net_displacement over the evaluated timeperiod. We interpreted the results in the way that in our point of view the wildboar with the highest steplength, speed or netto displacement got evaluated as the most active wildboar and vice versa. In order to backup that we also derived the overall mean speed and netdisplacement of the individuals in order back up our hypothesis.
+```{r message = FALSE, warning=FALSE}
+
+# steplength_mean
+
+ws_newyear_steplength_mean %>%
+count(datetime_round, TierName) %>%
+ggplot(mapping = aes(x = datetime_round, y = TierName)) +
+geom_tile(mapping = aes(fill = ws_newyear_steplength_mean$steplength_mean)) 
+
+
+# speed_mean
+
+ws_newyear_speed_mean %>%
+count(datetime_round, TierName) %>%
+ggplot(mapping = aes(x = datetime_round, y = TierName)) +
+geom_tile(mapping = aes(fill = ws_newyear_speed_mean$speed_mean)) 
+
+view(ws_newyear_speed_mean)
+
+
+#net displacement
+
+ws_newyear_net_displacement %>%
+count(datetime_round, TierName) %>%
+ggplot(mapping = aes(x = datetime_round, y = TierName)) +
+geom_tile(mapping = aes(fill = ws_newyear_net_displacement$net_displacement)) 
+
+view(ws_newyear_net_displacement)
+
+``` 
+
+
+
+Different visualization approaches  might be even more useful in order to derive the real overall "laziness" or "activeness"
+
+
+```{r message = FALSE, warning=FALSE}
+# i.e. the geom_point to derive the most active or laziest wildboar
+ggplot(data = ws_newyear_steplength_mean, aes(datetime_round, steplength_mean, colour=TierName)) + geom_point()
+
+
+# An alternative of the geom_tile visualization approach which basically does not show anything new.
+# A more interesting visualization approach seems to be the use of the geom_boxplot:
+  
+
+ggplot(data = ws_newyear_speed_mean, aes(x=TierName, y = speed_mean)) +
+geom_boxplot()
+
+
+ggplot(data = ws_newyear_steplength_mean, aes(x=TierName, y = steplength_mean)) +
+geom_boxplot()
+
+
+ggplot(data = ws_newyear_net_displacement, aes(x=TierName, y = net_displacement)) +
+geom_boxplot()
+
+# These boxplots show the overall mean proxies of our indicator like speed /  steplength and net displacement of the individuals and are therefore are clearly the most adequate ways to visualize the overall activeness.The overall winner therefore seems to be the individual Fritz whereas he has the highest mean speed, steplength and net displacement over the hole timeperiod chosen.The overall most laziest wildboar therefore seems to be the wildboar indivual Sabine.
+
+
+# This can also be expressed in numbers:
+
+ws_newyear_speed %>%
+  group_by(TierName) %>%
+  st_drop_geometry() %>%
+  summarise(mean = mean(speed, na.rm =TRUE))
+
+ws_newyear_steplength %>%
+  group_by(TierName) %>%
+  st_drop_geometry() %>%
+  summarise(mean = mean(steplength, na.rm =TRUE))
+
+# !
+ws_newyear_net_displacement %>%
+  group_by(TierName) %>%
+  summarise(mean = mean(net_displacement, na.rm =TRUE))
+
+# Interestingly the last lines of code show a different result whereas according to the overall mean of net displacement the winner seems to be the individual Caroline. We therefore correct our crowning and give the titel of the most adventurous wild boar = therefore most traveled wild boar to the indivual Caroline.
+
+```
