@@ -6,7 +6,7 @@ output: html_document
 ---
 
 
-### Load the necessary libraries.
+### Load the necessary Libraries.
 
 ```{r message = FALSE, warning=FALSE}
 
@@ -33,6 +33,7 @@ Wildschwein_sf <- st_as_sf(wildschwein_BE,                            # Convert 
                               crs = 2056)
 Orthophoto <- rast("Swissimage_1m_2014.tif")                          # Import Orthophoto as Raster-Data
 Map <- rast("Map_1to25000_2018.tif")                                  # Import Map as Raster-Data
+Feldfruechte <- read_sf("Feldfruechte_1m_2021.gpkg")
 TLM_Bodenbedeckung <- st_read("TLM_Bodenbedeckung_2020.geojson")      # Import Landcover-Types
 TLM_Strassen <- st_read("TLM_Strassen_2020.geojson")                  # Import Roads
 TLM_Eisenbahn <- st_read("TLM_Eisenbahn_2020.geojson")                # Import Railway-Lines
@@ -42,33 +43,108 @@ TLM_Freizeitareale <- st_read("TLM_Freizeitareale_2020.geojson")      # Import L
 ```
 
 
-### Overview and clean data
+### Clean & Convert Data.
 
 ```{r message = FALSE, warning=FALSE}
+
+### Convert CRS:
 
 Wildschwein_sf          # Projected CRS: CH1903+ / LV95
 Orthophoto              # Projected CRS: CH1903 / LV03
 Map                     # Projected CRS: CH1903 / LV03
+Feldfruechte            # Projected CRS: CH1903+ / LV95
 TLM_Bodenbedeckung      # Projected CRS: WGS 84
 TLM_Strassen            # Projected CRS: CH1903 / LV03
 TLM_Eisenbahn           # Projected CRS: CH1903 / LV03
 TLM_Gebaeude            # Projected CRS: CH1903 / LV03
 TLM_Freizeitareale      # Projected CRS: CH1903 / LV03
 
-Orthophoto <- st_transform(Orthophoto, crs = st_crs(2056))
-Map <- st_transform(Map, crs = st_crs(2056))
 TLM_Bodenbedeckung <- st_transform(TLM_Bodenbedeckung, crs = st_crs(2056))
 TLM_Strassen <- st_transform(TLM_Strassen, crs = st_crs(2056))
 TLM_Eisenbahn <- st_transform(TLM_Eisenbahn, crs = st_crs(2056))
 TLM_Gebaeude <- st_transform(TLM_Gebaeude, crs = st_crs(2056))
 TLM_Freizeitareale <- st_transform(TLM_Freizeitareale, crs = st_crs(2056))
 
-# test
 
-# FRAGEN:
-# GIT Upload funktioniert nicht
-# wie crs von raster data ändern?
-# auflösung von raster data bei plots/downloads schlecht
+### Objektart as Numeric:
+
+TLM_Bodenbedeckung$objektart <- as.numeric(TLM_Bodenbedeckung$objektart)
+TLM_Strassen$objektart <- as.numeric(TLM_Strassen$objektart)
+TLM_Eisenbahn$objektart <- as.numeric(TLM_Eisenbahn$objektart)
+TLM_Gebaeude$objektart <- as.numeric(TLM_Gebaeude$objektart)
+TLM_Freizeitareale$objektart <- as.numeric(TLM_Freizeitareale$objektart)
+
+```
+
+
+### Add Metadata
+
+```{r}
+### TLM_Bodenbedeckung:
+
+objektart <- c(1:15)
+objektart_Beschreibung <- c("Fels", "Fels locker", "Felsbloecke", "Felsbloecke locker", "Fliessgewaesser", "Gebueschwald", "Lockergestein", "Lockergestein locker", "Gletscher", "Stehende Gewaesser", "Feuchtgebiet", "Wald", "Wald offen", "Gehoelzflaeche", "Schneefeld Toteis")
+Attributnamen <- data.frame(objektart, Objektart_Beschreibung)
+
+TLM_Bodenbedeckung <-left_join(TLM_Bodenbedeckung, Attributnamen, by = "objektart")
+
+
+### Strassen:
+
+objektart <- c(1:23)
+objektart_Beschreibung <- c("Ausfahrt", "Einfahrt", "Autobahn", "Raststaette", "Verbindung", "Zufahrt", "Dienstzufahrt", "10m Strasse", "6m Strasse", "4m Strasse Gewaesser", "3m Strasse", "Platz", "Autozug", "Faehre", "2m Weg", "1m Weg", "1m Wegfragment", "2m Wegfragment", "Markierte Spur","8m Strasse","Autostrasse","Klettersteig", "Provisorium")
+Attributnamen <- data.frame(objektart, objektart_Beschreibung)
+
+TLM_Strassen <-left_join(TLM_Strassen, Attributnamen, by = "objektart")
+
+
+### Eisenbahn:
+
+objektart <- c(0,2,4,5)
+objektart_Beschreibung <- c("Normalspur", "Schmalspur", "Schmalspur mit Normalspur", "Kleinbahn")
+Attributnamen <- data.frame(objektart, objektart_Beschreibung)
+
+TLM_Eisenbahn <-left_join(TLM_Eisenbahn, Attributnamen, by = "objektart")
+
+
+### Gebaeude:
+
+objektart <- c(0:22)
+objektart_Beschreibung <- c("Gebaeude", "NA", "Hochhaus", "Hochkamin", "Turm", "Kuehlturm", "Lagertank", "Lueftungsschacht", "Offenes Gebaeude", "Treibhaus", "Im Bau", "Kapelle", "Sakraler Turm", "Sakrales Gebaeude", "NA", "Flugdach", "Unterirdisches Gebaeude", "Mauer gross", "Mauer gross gedeckt", "Historische Baute", "NA", "NA", "Verbindungsbruecke")
+Attributnamen <- data.frame(objektart, objektart_Beschreibung)
+
+TLM_Gebaeude <-left_join(TLM_Gebaeude, Attributnamen, by = "objektart")
+
+
+### Freizeitareale:
+
+objektart <- c(0:7)
+objektart_Beschreibung <- c("Campingplatzareal", "Freizeitanlagenareal", "Golfplatzareal", "Pferderennbahnareal", "Schwimmbadareal", "Sportplatzareal", "Standplatzareal", "Zooareal")
+Attributnamen <- data.frame(objektart, objektart_Beschreibung)
+
+TLM_Freizeitareale <-left_join(TLM_Freizeitareale, Attributnamen, by = "objektart")
+
+```
+
+
+### Overview Data.
+
+```{r}
+
+tm_shape(shp = TLM_Bodenbedeckung) + 
+  tm_fill(col = "objektart_Beschreibung")
+
+tm_shape(shp = TLM_Strassen) + 
+  tm_lines(col = "objektart_Beschreibung")
+
+tm_shape(shp = TLM_Eisenbahn) + 
+  tm_lines(col = "objektart_Beschreibung")
+
+tm_shape(shp = TLM_Gebaeude) + 
+  tm_polygons	(col = "objektart_Beschreibung")
+
+tm_shape(shp = TLM_Freizeitareale) + 
+  tm_polygons	(col = "objektart_Beschreibung")
 
 ```
 
@@ -93,11 +169,26 @@ write.csv(schreck_locations, file = "schreck_locations.csv")
 
 ```{r}
 
-tm_shape(shp = wildschwein_BE_sf) + 
+tm_shape(shp = Wildschwein_sf) + 
     tm_dots(col = "TierName")
 
 b<- tm_shape(shp = Orthophoto) + 
-  tm_rgb()
+  tm_rgb() + 
+  tm_shape(shp = Wildschwein_sf) + 
+    tm_dots(col = "TierName") +
+  tm_compass(type = "arrow", position = c(0.224,0.02), bg.color = "white", bg.alpha = 0.75, size = 1.8) + 
+  tm_scale_bar(breaks = c(0, 0.5, 1, 1.5, 2), text.size = 0.75, position = c("left", "bottom"), bg.color = "white", bg.alpha = 0.75) +
+  tm_credits("Scale: 1:25'000 \nData source: swisstopo, ZHAW \nAuthor: Windisch & Quente", fontface = "italic",  bg.color = "white", bg.alpha = 0.75, width = 1, position = c(0.72,0.02)) +
+  tm_logo(file = "zhaw_lsfm_iunr_schwarz.png", position = c(0.78,0.86)) + 
+  tm_layout(main.title = " Movement Patterns of Wild-Boar (Sus Scrofa) in the Seeland District (2014-2015)",
+            main.title.size = 1,
+            legend.title.size = 1,
+            legend.text.size = 0.6,
+            legend.position = c("left","top"),
+            legend.bg.color = "white",
+            legend.bg.alpha = 1,
+            frame = F)
+
 tmap_save(tm = b, filename = "b.pdf", width = 17, height = 14, units = "cm", dpi = 5000)
 
 a<- tm_shape(shp = Map) + 
@@ -105,34 +196,6 @@ a<- tm_shape(shp = Map) +
 tmap_save(tm = a, filename = "a.pdf", width = 17, height = 14, units = "cm", dpi = 5000)
 
 tm_shape(shp = TLM_Gebaeude) + 
-  tm_polygons	(col = "objektart")
-
-
-head(TLM_Bodenbedeckung)
-View(TLM_Bodenbedeckung)
-TLM_Bodenbedeckung$objektart <- as.numeric(TLM_Bodenbedeckung$objektart)
-
-objektart <- c(1:15)
-objektart_Beschreibung <- c("Fels", "Fels locker", "Felsbloecke", "Felsbloecke locker", "Fliessgewaesser", "Gebueschwald", "Lockergestein", "Lockergestein locker", "Gletscher", "Stehende Gewaesser", "Feuchtgebiet", "Wald", "Wald offen", "Gehoelzflaeche", "Schneefeld Toteis")
-Attributnamen_TLM <- data.frame(objektart, objektart_Beschreibung)
-
-TLM_Bodenbedeckung <-left_join(TLM_Bodenbedeckung, Attributnamen_TLM, by = "objektart")
-View(TLM_Bodenbedeckung)
-
-
-tm_shape(shp = TLM_Bodenbedeckung) + 
-  tm_fill(col = "objektart_Beschreibung")
-
-tm_shape(shp = TLM_Strassen) + 
-  tm_lines(col = "objektart")
-
-tm_shape(shp = TLM_Eisenbahn) + 
-  tm_lines(col = "objektart")
-
-tm_shape(shp = TLM_Gebaeude) + 
-  tm_polygons	(col = "objektart")
-
-tm_shape(shp = TLM_Freizeitareale) + 
   tm_polygons	(col = "objektart")
 
 ```
