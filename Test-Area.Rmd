@@ -20,6 +20,7 @@ library(sf)
 library(tmap)
 library(SimilarityMeasures)
 library(lubridate)
+library(tidyr)
 
 ```
 
@@ -31,9 +32,10 @@ library(lubridate)
 Wildschwein_sf <- st_as_sf(wildschwein_BE,                            # Convert wild-boar csv-data in Spatial Object
                               coords = c("E", "N"), 
                               crs = 2056)
+Study_Area <- st_read("StudyArea.geojson")                            # Import Study Area
 Orthophoto <- rast("Swissimage_1m_2014.tif")                          # Import Orthophoto as Raster-Data
 Map <- rast("Map_1to25000_2018.tif")                                  # Import Map as Raster-Data
-Feldfruechte <- read_sf("Feldfruechte_1m_2021.gpkg")
+Feldfruechte <- st_read("Feldfruechte_1m_2021.geojson")
 TLM_Bodenbedeckung <- st_read("TLM_Bodenbedeckung_2020.geojson")      # Import Landcover-Types
 TLM_Strassen <- st_read("TLM_Strassen_2020.geojson")                  # Import Roads
 TLM_Eisenbahn <- st_read("TLM_Eisenbahn_2020.geojson")                # Import Railway-Lines
@@ -50,6 +52,7 @@ TLM_Freizeitareale <- st_read("TLM_Freizeitareale_2020.geojson")      # Import L
 ### Convert CRS:
 
 Wildschwein_sf          # Projected CRS: CH1903+ / LV95
+Study_Area              # Projected CRS: CH1903+ / LV95
 Orthophoto              # Projected CRS: CH1903 / LV03
 Map                     # Projected CRS: CH1903 / LV03
 Feldfruechte            # Projected CRS: CH1903+ / LV95
@@ -74,17 +77,35 @@ TLM_Eisenbahn$objektart <- as.numeric(TLM_Eisenbahn$objektart)
 TLM_Gebaeude$objektart <- as.numeric(TLM_Gebaeude$objektart)
 TLM_Freizeitareale$objektart <- as.numeric(TLM_Freizeitareale$objektart)
 
+
+### Clip Data to Study_Area
+
+Wildschwein_sf <- st_intersection(Wildschwein_sf, Study_Area)
+TLM_Bodenbedeckung <- st_intersection(TLM_Bodenbedeckung, Study_Area)
+TLM_Strassen <- st_intersection(Study_Area, TLM_Strassen)
+TLM_Eisenbahn <- st_intersection(Study_Area, TLM_Eisenbahn)
+TLM_Gebaeude <- st_intersection(Study_Area, TLM_Gebaeude)
+TLM_Freizeitareale <- st_intersection(Study_Area, TLM_Freizeitareale)
+
+
+### Choose Wild-Boar Data from 2014 to 2015
+
+Wildschwein_select <- Wildschwein_sf %>% 
+  filter(DatetimeUTC >= as.Date("2014-12-15") & DatetimeUTC < as.Date("2015-01-15"))
+
+timespan <- as.numeric(difftime(time1 = "2015-01-15", time2 = "2014-12-15", units = "secs"))
+
 ```
 
 
 ### Add Metadata
 
 ```{r}
-### TLM_Bodenbedeckung:
+### Bodenbedeckung:
 
 objektart <- c(1:15)
 objektart_Beschreibung <- c("Fels", "Fels locker", "Felsbloecke", "Felsbloecke locker", "Fliessgewaesser", "Gebueschwald", "Lockergestein", "Lockergestein locker", "Gletscher", "Stehende Gewaesser", "Feuchtgebiet", "Wald", "Wald offen", "Gehoelzflaeche", "Schneefeld Toteis")
-Attributnamen <- data.frame(objektart, Objektart_Beschreibung)
+Attributnamen <- data.frame(objektart, objektart_Beschreibung)
 
 TLM_Bodenbedeckung <-left_join(TLM_Bodenbedeckung, Attributnamen, by = "objektart")
 
@@ -92,7 +113,7 @@ TLM_Bodenbedeckung <-left_join(TLM_Bodenbedeckung, Attributnamen, by = "objektar
 ### Strassen:
 
 objektart <- c(1:23)
-objektart_Beschreibung <- c("Ausfahrt", "Einfahrt", "Autobahn", "Raststaette", "Verbindung", "Zufahrt", "Dienstzufahrt", "10m Strasse", "6m Strasse", "4m Strasse Gewaesser", "3m Strasse", "Platz", "Autozug", "Faehre", "2m Weg", "1m Weg", "1m Wegfragment", "2m Wegfragment", "Markierte Spur","8m Strasse","Autostrasse","Klettersteig", "Provisorium")
+objektart_Beschreibung <- c("Ausfahrt", "Einfahrt", "Autobahn", "Raststaette", "Verbindung", "Zufahrt", "Dienstzufahrt", "10m Strasse", "6m Strasse", "4m Strasse", "3m Strasse", "Platz", "Autozug", "Faehre", "2m Weg", "1m Weg", "1m Wegfragment", "2m Wegfragment", "Markierte Spur","8m Strasse","Autostrasse","Klettersteig", "Provisorium")
 Attributnamen <- data.frame(objektart, objektart_Beschreibung)
 
 TLM_Strassen <-left_join(TLM_Strassen, Attributnamen, by = "objektart")
@@ -131,6 +152,9 @@ TLM_Freizeitareale <-left_join(TLM_Freizeitareale, Attributnamen, by = "objektar
 
 ```{r}
 
+tm_shape(shp = Wildschwein_select) + 
+  tm_dots(col = "TierName")
+
 tm_shape(shp = TLM_Bodenbedeckung) + 
   tm_fill(col = "objektart_Beschreibung")
 
@@ -141,10 +165,175 @@ tm_shape(shp = TLM_Eisenbahn) +
   tm_lines(col = "objektart_Beschreibung")
 
 tm_shape(shp = TLM_Gebaeude) + 
-  tm_polygons	(col = "objektart_Beschreibung")
+  tm_polygons(col = "objektart_Beschreibung")
 
 tm_shape(shp = TLM_Freizeitareale) + 
-  tm_polygons	(col = "objektart_Beschreibung")
+  tm_polygons(col = "objektart_Beschreibung")
+
+```
+
+
+### Combine Human Influence Areas.
+
+```{r}
+### Geometry Type: Lines
+
+Strassen_kl <- TLM_Strassen[,c("objektart_Beschreibung", "geometry")]
+Eisenbahn_kl <- TLM_Eisenbahn[,c("objektart_Beschreibung", "geometry")]
+
+Lines <- union(Strassen_kl, Eisenbahn_kl)
+Lines <- st_as_sf(Lines)
+
+tm_shape(shp = Lines) + 
+  tm_lines(col = "objektart_Beschreibung")
+
+
+### Geometry Type: Polygons
+
+Gebaeude_kl <- TLM_Gebaeude[,c("objektart_Beschreibung", "geometry")]
+Freizeitareale_kl <- TLM_Freizeitareale[,c("objektart_Beschreibung", "geometry")]
+
+Polygons <- union(Gebaeude_kl, Freizeitareale_kl)
+Polygons <- st_as_sf(Polygons)
+
+tm_shape(shp = Polygons) + 
+  tm_polygons(col = "objektart_Beschreibung")
+
+
+### Total Human Influence Areas:
+
+Human_Influence_Areas <- union(Lines, Polygons)
+Human_Influence_Areas <- st_as_sf(Human_Influence_Areas)
+
+tm_shape(shp = Human_Influence_Areas) + 
+  tm_polygons(col = "objektart_Beschreibung")+
+  tm_lines(col = "objektart_Beschreibung")
+
+```
+
+
+
+### Create Buffer around Human Influence Areas.
+
+```{r}
+
+Human_Influence_Areas_Buffer <- st_buffer(x = Human_Influence_Areas, dist = 25)
+
+tm_shape(shp = Human_Influence_Areas_Buffer) + 
+  tm_polygons(col = "grey") + 
+  tm_shape(shp = Wildschwein_select) + 
+    tm_dots(col = "TierName")
+
+```
+
+
+
+### Where the Wild-Boars stay I.
+
+```{r}
+
+Wildboar_brave <- st_join(x = Wildschwein_select, y = Human_Influence_Areas_Buffer)
+
+Wildboar_brave$objektart_Beschreibung <- replace_na(data = Wildboar_brave$objektart_Beschreibung, replace = "Wald&Wiesen&Natur")
+
+Wildboar_brave <- mutate(Wildboar_brave, Human_Influence_Areas = if_else(objektart_Beschreibung == "Wald&Wiesen&Natur", "Nature", "Human_Influence_Areas"))
+
+Wildboar_brave <- st_drop_geometry(Wildboar_brave)
+
+Wildboar_brave <- mutate(Wildboar_brave,time_of_stay = as.integer(difftime(time1 = lead(DatetimeUTC), time2 = DatetimeUTC), units = "secs"))
+
+Wildboar_brave <- Wildboar_brave[,c("TierName", "objektart_Beschreibung", "time_of_stay", "Human_Influence_Areas")]
+
+a <-  Wildboar_brave %>%
+  filter(time_of_stay >0) %>%
+  group_by(TierName, objektart_Beschreibung) %>%
+  summarise(time_of_stay_s = sum(time_of_stay)) %>%
+  mutate(time_of_stay_percent = (time_of_stay_s/timespan)*100)
+a
+
+ggplot(a, aes(x = TierName, y = time_of_stay_percent, fill = objektart_Beschreibung)) +
+  geom_col()
+
+
+b <-  Wildboar_brave %>%
+  filter(time_of_stay >0) %>%
+  group_by(TierName, Human_Influence_Areas) %>%
+  summarise(time_of_stay_s = sum(time_of_stay)) %>%
+  mutate(time_of_stay_percent = (time_of_stay_s/timespan)*100)
+b
+
+ggplot(b, aes(x = TierName, y = time_of_stay_percent, fill = Human_Influence_Areas)) +
+  geom_col()
+
+```
+
+
+
+### The bravest/fearfulest Wild-Boar.
+
+```{r}
+
+### the bravest Wild-Boar
+
+Wildboar_brave_rank <- b %>%
+  group_by(TierName) %>%
+  filter(Human_Influence_Areas == "Human_Influence_Areas") %>%
+  arrange(desc(time_of_stay_percent))
+Wildboar_brave_rank$Rank <- 1:nrow(Wildboar_brave_rank)
+
+Wildboar_brave_rank
+
+
+### the fearfulest Wild-Boar
+
+Wildboar_fearful_rank <- b %>%
+  group_by(TierName) %>%
+  filter(Human_Influence_Areas == "Nature") %>%
+  arrange(desc(time_of_stay_percent))
+Wildboar_fearful_rank$Rank <- 1:nrow(Wildboar_fearful_rank)
+
+Wildboar_fearful_rank
+
+```
+
+
+
+-----------------------------------------------------
+
+
+### Create Agriculture Areas.
+
+```{r}
+
+Bodenbedeckung_kl <- TLM_Bodenbedeckung[,c("objektart_Beschreibung", "geometry")]
+
+tm_shape(shp = Study_Area) + 
+  tm_polygons(col = "green") +
+  tm_shape(shp = Bodenbedeckung_kl) + 
+    tm_polygons(col = "objektart_Beschreibung") +
+  tm_shape(shp = Human_Influence_Areas) + 
+    tm_polygons(col = "objektart_Beschreibung")
+
+
+
+
+
+Not_Agriculture_Land <- union(Polygons, Bodenbedeckung_kl)
+Not_Agriculture_Land <- st_as_sf(Not_Agriculture_Land)
+
+tm_shape(shp = Study_Area) + 
+  tm_polygons(col = "green")+
+  tm_shape(shp = Not_Agriculture_Land) + 
+    tm_polygons(col = "grey")
+
+
+AgricultureLand <- st_difference(x = Study_Area, y = Not_Agriculture_Land)
+  tm_shape(shp = AgricultureLand) + 
+    tm_polygons(col = "grey")
+
+
+ws_be_sf %>% 
+  filter(DatetimeUTC >= as.Date("2014-12-15") & DatetimeUTC < as.Date("2015-01-15"))
 
 ```
 
@@ -152,20 +341,53 @@ tm_shape(shp = TLM_Freizeitareale) +
 -----------------------------------------------------
 
 
+### Combine Nature/Aggriculture Land.
+
 ```{r}
+Feldfruechte <- st_read("Feldfruechte_1m_2021.geojson")
+TLM_Bodenbedeckung <- st_read("TLM_Bodenbedeckung_2020.geojson")
+TLM_Bodenbedeckung <- st_transform(TLM_Bodenbedeckung, crs = st_crs(2056))
+TLM_Bodenbedeckung$objektart <- as.numeric(TLM_Bodenbedeckung$objektart)
+head(TLM_Bodenbedeckung)
+head(Feldfruechte)
 
-head(wildschwein_metadata)
-head(wildschwein_overlap_temp)
-head(schreck_agenda)
-head(schreck_locations)
+Bodenbedeckung_kl <- TLM_Bodenbedeckung[,c("objektart_Beschreibung", "geometry")]
 
-write.csv(wildschwein_BE, file = "wildschwein_BE.csv")
-write.csv(wildschwein_metadata, file = "wildschwein_metadata.csv")
-write.csv(wildschwein_overlap_temp, file = "wildschwein_overlap_temp.csv")
-write.csv(schreck_agenda, file = "schreck_agenda.csv")
-write.csv(schreck_locations, file = "schreck_locations.csv")
+Feldfruechte$objektart_Beschreibung <- Feldfruechte$Frucht
+Feldfruechte$geometry <- Feldfruechte$geom
+Feldfruechte_kl <- Feldfruechte[,c("objektart_Beschreibung", "geometry")]
+v<-st_as_sfc(TLM_Bodenbedeckung)
+
+Polygons<-union(Bodenbedeckung_kl, Feldfruechte_kl)
+Polygons<-st_as_sf(Polygons)
+
+tm_shape(shp = Polygons) + 
+  tm_polygons(col = "objektart_Beschreibung")
+
+st_sfc(Feldfruechte$geom)
+Feldfruechte$geometry<-Feldfruechte$geom
+
+rename_geometry <- function(g, name){
+    current = attr(g, "sf_column")
+    names(g)[names(g)==current] = name
+    st_geometry(g)=name
+    g
+}
+Feldfruechte<- rename_geometry(Feldfruechte, "geometry")
+
+TLM_Bodenbedeckung<-st_cast(TLM_Bodenbedeckung, to = "POLYGON")
+
+Feldfruechte<-st_zm(x = Feldfruechte, drop = F, what="Z")
+TLM_Bodenbedeckung<-st_zm(x = TLM_Bodenbedeckung, drop = T)
+
+tm_shape(shp = Feldfruechte) + 
+  tm_polygons	(col = "Frucht") +tmap_options(max.categories = 44)+
+tm_shape(shp = Wildschwein_sf) + 
+    tm_dots(col = "TierName")
 
 ```
+
+
 
 ```{r}
 
@@ -199,6 +421,8 @@ tm_shape(shp = TLM_Gebaeude) +
   tm_polygons	(col = "objektart")
 
 ```
+
+
 
 
 
