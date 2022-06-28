@@ -1,10 +1,24 @@
+
 ---
 title: "Spatial Analyses of wild boars data regarding on psycological patterns"
 subtitle: "Semester Project for Patterns & Trends in Environmental Data FS22"
 author: "Authors: Jonas Michael Windisch and Johannes Quente"
 date: "Submission Date: 03.07.2022"
-output: html_document
+output:
+  html_document:
+    theme: flatly
+    highlight: tango
+    toc: true
+    toc_float: true
+    code_download: true
+    output_dir: "docs"
+    code_folding: show
 ---
+
+<style>
+body {
+text-align: justify}
+</style>
 
 
 ## Abstract
@@ -13,6 +27,7 @@ xxx
 
 
 ## Introduction
+
 
 In recent decades, an expansion and increase of wild boar (*Sus scrofa*) populations has been observed across Europe, with colonising agricultural and urban areas, thus increasing problems of cohabitation with humans (Rutten et al., 2020). In particular, the wild boar often comes into conflict with humans, the main problems being the transmission of diseases to domestic animals and humans, collisions with vehicles, disturbance or threat to citizens and damage to gardens, public parks, pasture and agriculture (Meng et al. 2009).
 
@@ -25,18 +40,105 @@ The research question been asked is: How can the different environments (settlem
 
 For this project we needed the following data: wild boar data are given by the course administration of Patterns & Trends in Environmental Data, ZHAW, orthoimages & map are given by swisstopo (open access) and the spatial data are  given by geovite.ethz.ch (open access). An overview over the used data is given in tabel 1.
 
-Data              | Data Format   | Geometry Type | Projected CRS
--------------     | ------------- | ------------- | ------------- 
-Wild-Boar         |.csv           |Points         |CH1903+ / LV95
-Orthophoto        |.tif           |Raster         |CH1903 / LV03
-Map               |.tif           |Raster         |CH1903 / LV03
-TLM_Landcover     |.geojson       |Polygon        |WGS 84
-TLM_Streets       |.geojson       |Lines          |CH1903 / LV03
-TLM_Railway       |.geojson       |Lines          |CH1903 / LV03
-TLM_Building      |.geojson       |Polygon        |CH1903 / LV03
-TLM_LeisureAreas  |.geojson       |Polygon        |CH1903 / LV03
+```{r}
+
+library(knitr)
+
+data_aquisistion <- data.frame(
+  Data = c("Wild-Boar", "Orthophoto", "Map", "TLM_Landcover", "TLM_Streets", "TLM_Railway", "TLM_Building", "TLM_LeisureAreas"),
+  Data_Format = c(".csv", ".tif", ".tif", ".geojson", ".geojson", ".geojson", ".geojson", ".geojson"),
+  Geometry_Type = c("Points", "Raster", "Raster", "Polygon", "Lines", "Lines", "Polygon", "Polygon"),
+  Projected_CRS = c("CH1903+ / LV95", "CH1903 / LV03", "CH1903 / LV03", "WGS 84", "CH1903 / LV03", "CH1903 / LV03", "CH1903 / LV03", "CH1903 / LV03")
+)
+
+kable(data_aquisistion, col.names = gsub("[_]", " ", names(data_aquisistion)), caption = "Table 1: Overwiev of the used data for this project")
+
+```
+
+After loading the necessary libraries and the data acquisition, we converted their different coordinate reference system into a consistent one (CH1903+ / LV95). Then, the data are clipped to the study area with the extension of 2567000/1202000 to 2573000/1207000. The study area is located in the canton of Bern, district Seeland, Commune Gempelen and lies directly on lake Neuchâtel. To reduce the amount of data volume - due to hardware limitation - only 7 of 19 wild boars were taken and the time period from 2014-12-15 until the 2015-01-15 was chosen. The result therefore is rather a simplified way to solve our question but includes all the necessary data to answer our research questions.
+
+```{r message = FALSE, warning = FALSE, echo = FALSE, eval = FALSE}
+
+### Loading Libraries:
+
+library(devtools)
+library(ComputationalMovementAnalysisData)
+library(ggplot2)
+library(readr)
+library(dplyr)
+library(terra)
+library(sf)
+library(tmap)
+library(SimilarityMeasures)
+library(lubridate)
+library(tidyr)
+library(knitr)
 
 
+### Data Import:
+
+Wildschwein_sf <- st_as_sf(wildschwein_BE,                            # Convert wild-boar csv-data in Spatial Object
+                              coords = c("E", "N"), 
+                              crs = 2056)
+Study_Area <- st_read("StudyArea.geojson")                            # Import Study Area
+Orthophoto <- rast("Swissimage_1m_2014.tif")                          # Import Orthophoto as Raster-Data
+Map <- terra::rast("Map_1to25000_2018.tif")                                  # Import Map as Raster-Data
+Feldfruechte <- st_read("Feldfruechte_1m_2021.geojson")
+TLM_Bodenbedeckung <- st_read("TLM_Bodenbedeckung_2020.geojson")      # Import Landcover-Types
+TLM_Strassen <- st_read("TLM_Strassen_2020.geojson")                  # Import Roads
+TLM_Eisenbahn <- st_read("TLM_Eisenbahn_2020.geojson")                # Import Railway-Lines
+TLM_Gebaeude <- st_read("TLM_Gebaeude_Foodprint_2020.geojson")        # Import Buildings
+TLM_Freizeitareale <- st_read("TLM_Freizeitareale_2020.geojson")      # Import Leisure-Areas
+
+
+### Convert CRS:
+
+Wildschwein_sf          # Projected CRS: CH1903+ / LV95
+Study_Area              # Projected CRS: CH1903+ / LV95
+Orthophoto              # Projected CRS: CH1903 / LV03
+Map                     # Projected CRS: CH1903 / LV03
+Feldfruechte            # Projected CRS: CH1903+ / LV95
+TLM_Bodenbedeckung      # Projected CRS: WGS 84
+TLM_Strassen            # Projected CRS: CH1903 / LV03
+TLM_Eisenbahn           # Projected CRS: CH1903 / LV03
+TLM_Gebaeude            # Projected CRS: CH1903 / LV03
+TLM_Freizeitareale      # Projected CRS: CH1903 / LV03
+
+TLM_Bodenbedeckung <- st_transform(TLM_Bodenbedeckung, crs = st_crs(2056))
+TLM_Strassen <- st_transform(TLM_Strassen, crs = st_crs(2056))
+TLM_Eisenbahn <- st_transform(TLM_Eisenbahn, crs = st_crs(2056))
+TLM_Gebaeude <- st_transform(TLM_Gebaeude, crs = st_crs(2056))
+TLM_Freizeitareale <- st_transform(TLM_Freizeitareale, crs = st_crs(2056))
+
+
+### Objektart as Numeric:
+
+TLM_Bodenbedeckung$objektart <- as.numeric(TLM_Bodenbedeckung$objektart)
+TLM_Strassen$objektart <- as.numeric(TLM_Strassen$objektart)
+TLM_Eisenbahn$objektart <- as.numeric(TLM_Eisenbahn$objektart)
+TLM_Gebaeude$objektart <- as.numeric(TLM_Gebaeude$objektart)
+TLM_Freizeitareale$objektart <- as.numeric(TLM_Freizeitareale$objektart)
+
+
+### Clip Data to Study_Area
+
+Wildschwein_sf <- st_intersection(Wildschwein_sf, Study_Area)
+Feldfruechte <- st_intersection(Feldfruechte, Study_Area)
+TLM_Bodenbedeckung <- st_intersection(TLM_Bodenbedeckung, Study_Area)
+TLM_Strassen <- st_intersection(Study_Area, TLM_Strassen)
+TLM_Eisenbahn <- st_intersection(Study_Area, TLM_Eisenbahn)
+TLM_Gebaeude <- st_intersection(Study_Area, TLM_Gebaeude)
+TLM_Freizeitareale <- st_intersection(Study_Area, TLM_Freizeitareale)
+
+
+### Choose Wild-Boar Data from 2014 to 2015
+
+Wildschwein_select <- Wildschwein_sf %>% 
+  filter(DatetimeUTC >= as.Date("2014-12-15") & DatetimeUTC < as.Date("2015-01-15"))
+
+timespan <- as.numeric(difftime(time1 = "2015-01-15", time2 = "2014-12-15", units = "secs"))
+
+```
 
 ## Results
 
@@ -50,4 +152,9 @@ xxx
 
 ## Bibliography
 
-xxx
+M. Noelia Barrios-Garcia, Sebastian A. Ballari, "Impact of wild boar (Sus scrofa) in its introduced and native range: a review", Biol Invasions, vol, 14, pp. 2283–2300, 2012,             https://link.springer.com/content/pdf/10.1007/s10530-012-0229-6.pdf.
+
+X. J. Meng, D. S. Lindsay, and N. Sriranganathan, "Wild boars as sources for infectious diseases in livestock and humans", Philosophical Transactions of the Royal Society B: Biological Sciences, vol. 364, no. 1530, pp. 2697–2707, 2009,             https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2865094/pdf/rstb20090086.pdf.
+
+Anneleen Rutten, Jim Casaer, Diederik Strubbe and Herwig Leirs, "Agricultural and landscape factors     related to increasing wild boar agricultural damage in a highly anthropogenic landscape", Wildlife     Biology, vol. 2020, no. 1, pp. 1-11, 2020, https://onlinelibrary.wiley.com/doi/pdf/10.2981/wlb.00634.
+
