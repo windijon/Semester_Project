@@ -14,12 +14,28 @@ xxx
 
 ## Introduction
 
-xxx
+In recent decades, an expansion and increase of wild boar (*Sus scrofa*) populations has been observed across Europe, with colonising agricultural and urban areas, thus increasing problems of cohabitation with humans (Rutten et al., 2020). In particular, the wild boar often comes into conflict with humans, the main problems being the transmission of diseases to domestic animals and humans, collisions with vehicles, disturbance or threat to citizens and damage to gardens, public parks, pasture and agriculture (Meng et al. 2009).
+
+Wild boar damage to croplands is expressed in different ways: direct consumption of crops, rooting in search of bulbs, invertebrates or tubers, seed removal, trampling and damage to agricultural infrastructure (Barrios-García & Ballari 2012). Therefore, it is important to know their activity patterns and where and when the wild boars are in order to take countermeasures.
+
+The research question been asked is: How can the different environments (settlements, streets and different land use categories) been contextualized with the activity-patterns of the wild boar-data. How can this be conceptualized, modeled and further implemented in suitable visualizations to show behavioral patterns given to a certain environmental context and help to answer questions like “What does wild boar fear?” or “What are the behavioral constraints of wild boars?”.
 
 
 ## Material and Methods
 
-xxx
+For this project we needed the following data: wild boar data are given by the course administration of Patterns & Trends in Environmental Data, ZHAW, orthoimages & map are given by swisstopo (open access) and the spatial data are  given by geovite.ethz.ch (open access). An overview over the used data is given in tabel 1.
+
+Data              | Data Format   | Geometry Type | Projected CRS
+-------------     | ------------- | ------------- | ------------- 
+Wild-Boar         |.csv           |Points         |CH1903+ / LV95
+Orthophoto        |.tif           |Raster         |CH1903 / LV03
+Map               |.tif           |Raster         |CH1903 / LV03
+TLM_Landcover     |.geojson       |Polygon        |WGS 84
+TLM_Streets       |.geojson       |Lines          |CH1903 / LV03
+TLM_Railway       |.geojson       |Lines          |CH1903 / LV03
+TLM_Building      |.geojson       |Polygon        |CH1903 / LV03
+TLM_LeisureAreas  |.geojson       |Polygon        |CH1903 / LV03
+
 
 
 ## Results
