@@ -34,7 +34,7 @@ Wildschwein_sf <- st_as_sf(wildschwein_BE,                            # Convert 
                               crs = 2056)
 Study_Area <- st_read("StudyArea.geojson")                            # Import Study Area
 Orthophoto <- rast("Swissimage_1m_2014.tif")                          # Import Orthophoto as Raster-Data
-Map <- rast("Map_1to25000_2018.tif")                                  # Import Map as Raster-Data
+Map <- terra::rast("Map_1to25000_2018.tif")                                  # Import Map as Raster-Data
 Feldfruechte <- st_read("Feldfruechte_1m_2021.geojson")
 TLM_Bodenbedeckung <- st_read("TLM_Bodenbedeckung_2020.geojson")      # Import Landcover-Types
 TLM_Strassen <- st_read("TLM_Strassen_2020.geojson")                  # Import Roads
@@ -81,6 +81,7 @@ TLM_Freizeitareale$objektart <- as.numeric(TLM_Freizeitareale$objektart)
 ### Clip Data to Study_Area
 
 Wildschwein_sf <- st_intersection(Wildschwein_sf, Study_Area)
+Feldfruechte <- st_intersection(Feldfruechte, Study_Area)
 TLM_Bodenbedeckung <- st_intersection(TLM_Bodenbedeckung, Study_Area)
 TLM_Strassen <- st_intersection(Study_Area, TLM_Strassen)
 TLM_Eisenbahn <- st_intersection(Study_Area, TLM_Eisenbahn)
@@ -152,8 +153,18 @@ TLM_Freizeitareale <-left_join(TLM_Freizeitareale, Attributnamen, by = "objektar
 
 ```{r}
 
+#tm_shape(shp = Orthophoto) + 
+#  tm_rgb()
+
+#tm_shape(shp = Map) + 
+#  tm_rgb()
+
 tm_shape(shp = Wildschwein_select) + 
   tm_dots(col = "TierName")
+
+tm_shape(shp = Feldfruechte) + 
+  tm_fill(col = "Frucht") +
+  tmap_options(max.categories = 44)
 
 tm_shape(shp = TLM_Bodenbedeckung) + 
   tm_fill(col = "objektart_Beschreibung")
@@ -205,19 +216,20 @@ tm_shape(shp = Polygons) +
 Human_Influence_Areas <- union(Lines, Polygons)
 Human_Influence_Areas <- st_as_sf(Human_Influence_Areas)
 
+tm_shape(shp = Wildschwein_select) + 
+  tm_dots(col = "TierName") +
 tm_shape(shp = Human_Influence_Areas) + 
   tm_polygons(col = "objektart_Beschreibung")+
-  tm_lines(col = "objektart_Beschreibung")
+  tm_lines(col = "objektart_Beschreibung") 
 
 ```
-
 
 
 ### Create Buffer around Human Influence Areas.
 
 ```{r}
 
-Human_Influence_Areas_Buffer <- st_buffer(x = Human_Influence_Areas, dist = 25)
+Human_Influence_Areas_Buffer <- st_buffer(x = Human_Influence_Areas, dist = 100)
 
 tm_shape(shp = Human_Influence_Areas_Buffer) + 
   tm_polygons(col = "grey") + 
@@ -225,7 +237,6 @@ tm_shape(shp = Human_Influence_Areas_Buffer) +
     tm_dots(col = "TierName")
 
 ```
-
 
 
 ### Where the Wild-Boars stay I.
@@ -268,7 +279,6 @@ ggplot(b, aes(x = TierName, y = time_of_stay_percent, fill = Human_Influence_Are
 ```
 
 
-
 ### The bravest/fearfulest Wild-Boar.
 
 ```{r}
@@ -297,8 +307,98 @@ Wildboar_fearful_rank
 ```
 
 
+### Where the Wild-Boars stay II.
+
+```{r}
+
+Wildboar_Bodenbedeckung <- st_join(x = Wildschwein_select, y = TLM_Bodenbedeckung)
+
+Wildboar_Bodenbedeckung <- st_drop_geometry(Wildboar_Bodenbedeckung)
+
+Wildboar_Bodenbedeckung$objektart_Beschreibung <- replace_na(data = Wildboar_Bodenbedeckung$objektart_Beschreibung, replace = "Ackerland")
+
+Wildboar_Bodenbedeckung <- mutate(Wildboar_Bodenbedeckung,time_of_stay = as.integer(difftime(time1 = lead(DatetimeUTC), time2 = DatetimeUTC), units = "secs"))
+
+Wildboar_Bodenbedeckung <- Wildboar_Bodenbedeckung[,c("TierName", "objektart_Beschreibung", "time_of_stay")]
+
+Wildboar_Bodenbedeckung <-  Wildboar_Bodenbedeckung %>%
+  filter(time_of_stay >0) %>%
+  group_by(TierName, objektart_Beschreibung) %>%
+  summarise(time_of_stay_s = sum(time_of_stay)) %>%
+  mutate(time_of_stay_percent = (time_of_stay_s/timespan)*100)
+Wildboar_Bodenbedeckung
+
+ggplot(Wildboar_Bodenbedeckung, aes(x = TierName, y = time_of_stay_percent, fill = objektart_Beschreibung)) +
+  geom_col()
+
+```
+
 
 -----------------------------------------------------
+
+
+```{r}
+
+Feldfruechte <- st_read("Feldfruechte_1m_2021.geojson")
+
+Wildboar_Feldfruechte <- st_join(x = Wildschwein_select, y = Feldfruechte)
+
+Wildboar_Feldfruechte <- st_drop_geometry(Wildboar_Feldfruechte)
+
+Wildboar_Feldfruechte <- mutate(Wildboar_Feldfruechte,time_of_stay = as.integer(difftime(time1 = lead(DatetimeUTC), time2 = DatetimeUTC), units = "secs"))
+
+Wildboar_Feldfruechte <- filter(Wildboar_Feldfruechte, Wildboar_Feldfruechte$Frucht != "Feuchtgebiet" & Wildboar_Feldfruechte$Frucht != "Wald", )
+
+Wildboar_Feldfruechte <- Wildboar_Feldfruechte[,c("TierName", "Frucht", "time_of_stay")]
+
+  
+Bodenstatistik <-  Wildboar_Feldfruechte %>%
+  filter(time_of_stay >0) %>%
+  group_by(TierName, Frucht) %>%
+  summarise(time_of_stay_s = sum(time_of_stay)) %>%
+  mutate(time_of_stay_percent = (time_of_stay_s/timespan)*100)
+Bodenstatistik
+
+ggplot(Bodenstatistik, aes(x = TierName, y = time_of_stay_percent, fill = Frucht)) +
+  geom_col()
+
+
+
+
+
+
+
+
+
+
+Feldfruechte <- st_read("Feldfruechte_1m_2021.geojson")
+Wildboar_Bodenbedeckung <- st_join(x = Wildschwein_select, y = TLM_Bodenbedeckung)
+Wildboar_Bodenbedeckung <- st_drop_geometry(Wildboar_Bodenbedeckung)
+Wildboar_Bodenbedeckung <- Wildboar_Bodenbedeckung[,c("TierName", "DatetimeUTC", "objektart_Beschreibung")]
+
+Wildboar_Feldfruechte <- st_join(x = Wildschwein_select, y = Feldfruechte)
+Wildboar_Feldfruechte <- st_drop_geometry(Wildboar_Feldfruechte)
+Wildboar_Feldfruechte <- Wildboar_Feldfruechte[Wildboar_Feldfruechte$Frucht != "Feuchtgebiet" & Wildboar_Feldfruechte$Frucht != "Wald", ]
+Wildboar_Feldfruechte <- Wildboar_Feldfruechte[,c("TierName", "DatetimeUTC", "Frucht")]
+Wildboar_Feldfruechte$objektart_Beschreibung<-Wildboar_Feldfruechte$Frucht
+Wildboar_Feldfruechte <- Wildboar_Feldfruechte[,c("TierName", "DatetimeUTC", "objektart_Beschreibung")]
+Bodenstatistik <- union(Wildboar_Feldfruechte, Wildboar_Bodenbedeckung)
+
+Bodenstatistik <- mutate(Bodenstatistik,time_of_stay = as.integer(difftime(time1 = lead(DatetimeUTC), time2 = DatetimeUTC), units = "secs"))
+
+a <-  Bodenstatistik %>%
+  filter(time_of_stay >0) %>%
+  group_by(TierName, DatetimeUTC, objektart_Beschreibung) %>%
+  
+  
+  summarise(time_of_stay_s = sum(time_of_stay)) %>%
+  mutate(time_of_stay_percent = (time_of_stay_s/timespan)*100)
+a
+
+ggplot(a, aes(x = TierName, y = time_of_stay_percent, fill = objektart_Beschreibung)) +
+  geom_col()
+
+```
 
 
 ### Create Agriculture Areas.
