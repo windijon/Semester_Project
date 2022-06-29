@@ -190,97 +190,6 @@ ws_newyear_speed_mean %>%
 ```
 
 
-
-### Visualization of activity patterns 
-
-First:      Calculating Mean Steplengh
-, Second:     Plotting with geom_tile 
-, Y =         TierName
-, X =         mean hours of the day
-, fill =      steplegth
-
-
-Core result of the question answered: which is the most active / laziest wildboar. The interpretation is still a vage idea of what "active" / "laziest" means but in thsi project we defined it as the most active wildboar over a certain timeperiod. The results show clear "winners" and "loosers" when having a look on the mean_speed and mean_net_displacement over the evaluated timeperiod. We interpreted the results in the way that in our point of view the wildboar with the highest steplength, speed or netto displacement got evaluated as the most active wildboar and vice versa. In order to backup that we also derived the overall mean speed and netdisplacement of the individuals in order back up our hypothesis.
-```{r message = FALSE, warning=FALSE}
-
-# steplength_mean
-
-ws_newyear_steplength_mean %>%
-count(datetime_round, TierName) %>%
-ggplot(mapping = aes(x = datetime_round, y = TierName)) +
-geom_tile(mapping = aes(fill = ws_newyear_steplength_mean$steplength_mean)) 
-
-
-# speed_mean
-
-ws_newyear_speed_mean %>%
-count(datetime_round, TierName) %>%
-ggplot(mapping = aes(x = datetime_round, y = TierName)) +
-geom_tile(mapping = aes(fill = ws_newyear_speed_mean$speed_mean)) 
-
-view(ws_newyear_speed_mean)
-
-
-#net displacement
-
-ws_newyear_net_displacement %>%
-count(datetime_round, TierName) %>%
-ggplot(mapping = aes(x = datetime_round, y = TierName)) +
-geom_tile(mapping = aes(fill = ws_newyear_net_displacement$net_displacement)) 
-
-view(ws_newyear_net_displacement)
-
-``` 
-
-
-
-Different visualization approaches  might be even more useful in order to derive the real overall "laziness" or "activeness"
-
-
-```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE}
-# i.e. the geom_point to derive the most active or laziest wildboar
-ggplot(data = ws_newyear_steplength_mean, aes(datetime_round, steplength_mean, colour=TierName)) + geom_point()
-
-
-# An alternative of the geom_tile visualization approach which basically does not show anything new.
-# A more interesting visualization approach seems to be the use of the geom_boxplot:
-  
-
-ggplot(data = ws_newyear_speed_mean, aes(x=TierName, y = speed_mean)) +
-geom_boxplot()
-
-
-ggplot(data = ws_newyear_steplength_mean, aes(x=TierName, y = steplength_mean)) +
-geom_boxplot()
-
-
-ggplot(data = ws_newyear_net_displacement, aes(x=TierName, y = net_displacement)) +
-geom_boxplot()
-
-# These boxplots show the overall mean proxies of our indicator like speed /  steplength and net displacement of the individuals and are therefore are clearly the most adequate ways to visualize the overall activeness.The overall winner therefore seems to be the individual Fritz whereas he has the highest mean speed, steplength and net displacement over the hole timeperiod chosen.The overall most laziest wildboar therefore seems to be the wildboar indivual Sabine.
-
-
-# This can also be expressed in numbers:
-
-ws_newyear_speed %>%
-  group_by(TierName) %>%
-  st_drop_geometry() %>%
-  summarise(mean = mean(speed, na.rm =TRUE))
-
-ws_newyear_steplength %>%
-  group_by(TierName) %>%
-  st_drop_geometry() %>%
-  summarise(mean = mean(steplength, na.rm =TRUE))
-
-# !
-ws_newyear_net_displacement %>%
-  group_by(TierName) %>%
-  summarise(mean = mean(net_displacement, na.rm =TRUE))
-
-# Interestingly the last lines of code show a different result whereas according to the overall mean of net displacement the winner seems to be the individual Caroline. We therefore correct our crowning and give the titel of the most adventurous wild boar = therefore most traveled wild boar to the indivual Caroline.
-
-```
-
 For this project we needed the following data: wild boar data are given by the course administration of Patterns & Trends in Environmental Data, ZHAW, orthoimages & maps are given by swisstopo (open access) and the spatial data are  given by geovite.ethz.ch (open access). An overview over the used data is given in table 1.
 
 ```{r message = FALSE, warning = FALSE}
@@ -534,6 +443,95 @@ xxx
 
 
 ## Results
+
+### The most active / laziest and most adventurous wild boar
+
+First:      Calculating Mean Steplengh
+, Second:     Plotting with geom_tile 
+, Y =         TierName
+, X =         mean hours of the day
+, fill =      steplegth
+
+
+Core result of the question answered: which is the most active / laziest wildboar and most adventurous wild boar. The interpretation is still a vage idea of what "active" / "laziest" means but in thsi project we defined it as the most active wildboar over a certain timeperiod. The results show clear "winners" and "loosers" when having a look on the mean_speed and mean_net_displacement over the evaluated timeperiod. We interpreted the results in the way that in our point of view the wildboar with the highest steplength, speed or netto displacement got evaluated as the most active wild boar and vice versa. In order to backup that we also derived the overall mean speed and netdisplacement of the individuals in order back up our hypothesis and therefore finding the most adventurous wild boar.
+```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE}
+
+# steplength_mean
+
+ws_newyear_steplength_mean %>%
+count(datetime_round, TierName) %>%
+ggplot(mapping = aes(x = datetime_round, y = TierName)) +
+geom_tile(mapping = aes(fill = ws_newyear_steplength_mean$steplength_mean)) 
+
+
+# speed_mean
+
+ws_newyear_speed_mean %>%
+count(datetime_round, TierName) %>%
+ggplot(mapping = aes(x = datetime_round, y = TierName)) +
+geom_tile(mapping = aes(fill = ws_newyear_speed_mean$speed_mean)) 
+
+view(ws_newyear_speed_mean)
+
+
+#net displacement
+
+ws_newyear_net_displacement %>%
+count(datetime_round, TierName) %>%
+ggplot(mapping = aes(x = datetime_round, y = TierName)) +
+geom_tile(mapping = aes(fill = ws_newyear_net_displacement$net_displacement)) 
+
+view(ws_newyear_net_displacement)
+
+``` 
+
+
+Different visualization approaches might be even more useful in order to derive the real overall "laziness" or "activeness"
+
+
+```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE}
+# i.e. the geom_point to derive the most active or laziest wildboar
+ggplot(data = ws_newyear_steplength_mean, aes(datetime_round, steplength_mean, colour=TierName)) + geom_point()
+
+
+# An alternative of the geom_tile visualization approach which basically does not show anything new.
+# A more interesting visualization approach seems to be the use of the geom_boxplot:
+  
+
+ggplot(data = ws_newyear_speed_mean, aes(x=TierName, y = speed_mean)) +
+geom_boxplot()
+
+
+ggplot(data = ws_newyear_steplength_mean, aes(x=TierName, y = steplength_mean)) +
+geom_boxplot()
+
+
+ggplot(data = ws_newyear_net_displacement, aes(x=TierName, y = net_displacement)) +
+geom_boxplot()
+
+# These boxplots show the overall mean proxies of our indicator like speed /  steplength and net displacement of the individuals and are therefore are clearly the most adequate ways to visualize the overall activeness.The overall winner therefore seems to be the individual Fritz whereas he has the highest mean speed, steplength and net displacement over the hole timeperiod chosen.The overall most laziest wildboar therefore seems to be the wildboar indivual Sabine.
+
+
+# This can also be expressed in numbers:
+
+ws_newyear_speed %>%
+  group_by(TierName) %>%
+  st_drop_geometry() %>%
+  summarise(mean = mean(speed, na.rm =TRUE))
+
+ws_newyear_steplength %>%
+  group_by(TierName) %>%
+  st_drop_geometry() %>%
+  summarise(mean = mean(steplength, na.rm =TRUE))
+
+# !
+ws_newyear_net_displacement %>%
+  group_by(TierName) %>%
+  summarise(mean = mean(net_displacement, na.rm =TRUE))
+
+# Interestingly the last lines of code show a different result whereas according to the overall mean of net displacement the winner seems to be the individual Caroline. We therefore correct our crowning and give the titel of the most adventurous wild boar = therefore most traveled wild boar to the indivual Caroline.
+
+```
 
 ### The most fearful and the most brave wild boar
 
