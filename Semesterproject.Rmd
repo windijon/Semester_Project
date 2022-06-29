@@ -39,7 +39,7 @@ The threat of wild boar in cultural sites are becoming a greater problem in rece
 
 ## Introduction
 
-In recent decades, an expansion and increase of wild boar (*Sus scrofa*) populations has been observed across Europe, with colonising agricultural and urban areas, thus increasing problems of cohabitation with humans (Rutten et al., 2020). In particular, the wild boar often comes into conflict with humans, the main problems being the transmission of diseases to domestic animals and humans, collisions with vehicles, disturbance or threat to citizens and damage to gardens, public parks, pasture and agriculture (Meng et al. 2009).
+In recent decades, an expansion and increase of wild boar (*Sus scrofa*) populations has been observed across Europe, with colonizing agricultural and urban areas, thus increasing problems of cohabitation with humans (Rutten et al., 2020). In particular, the wild boar often comes into conflict with humans, the main problems being the transmission of diseases to domestic animals and humans, collisions with vehicles, disturbance or threat to citizens and damage to gardens, public parks, pasture and agriculture (Meng et al. 2009).
 
 Wild boar damage to croplands is expressed in different ways: direct consumption of crops, rooting in search of bulbs, invertebrates or tubers, seed removal, trampling and damage to agricultural infrastructure (Barrios-García & Ballari 2012). Therefore, it is important to know their activity patterns and where and when the wild boars are in order to take countermeasures.
 
@@ -48,7 +48,7 @@ The research question asked is: How can the different environments (settlements,
 
 ## Material and Methods
 
-### Data Aquision and Preprosessing
+### Data Aquision and Preprocessing 
 
 For this project we needed the following data: wild boar data are given by the course administration of Patterns & Trends in Environmental Data, ZHAW, orthoimages & maps are given by swisstopo (open access) and the spatial data are  given by geovite.ethz.ch (open access). An overview over the used data is given in table 1.
 
@@ -85,7 +85,6 @@ library(SimilarityMeasures)
 library(lubridate)
 library(tidyr)
 library(knitr)
-
 
 ### Data Import:
 
@@ -294,7 +293,6 @@ ws_newyear_speed_mean %>%
 ```
 
 
-
 ### The most fearful and the most brave wild boar
 
 To describe the effect of the human influence areas at the activity-patterns of the wild boars, the question was asked: What is the most fearful and the most brave wild boar? The "fearful" wild boar is defined as the animal which avoids urban areas. The "brave" wild boar is the one that ventures closest to settlements. The ranking was based on the time spent in human influence areas as a percentage over the entire study period (31 days). 
@@ -379,7 +377,7 @@ Wildboar_brave <- st_join(x = Wildschwein_select, y = Human_Influence_Areas_Buff
 
 Wildboar_brave$objektart_Beschreibung <- replace_na(data = Wildboar_brave$objektart_Beschreibung, replace = "Wald&Wiesen&Natur")
 
-Wildboar_brave <- mutate(Wildboar_brave, Human_Influence_Areas = if_else(objektart_Beschreibung == "Wald&Wiesen&Natur", "Natural_Habitats", "Human_Influence_Areas"))
+Wildboar_brave <- mutate(Wildboar_brave, Human_Influence_Areas = if_else(objektart_Beschreibung == "Wald&Wiesen&Natur", "Natural Habitats", "Human_Influence_Areas"))
 
 Wildboar_brave <- st_drop_geometry(Wildboar_brave)
 
@@ -492,6 +490,14 @@ geom_tile(mapping = aes(fill = ws_newyear_net_displacement$net_displacement))
 
 View(ws_newyear_net_displacement)
 
+``` 
+
+
+Different visualization approaches might be even more useful in order to derive the real overall "laziness" or "activeness"
+
+
+```{r message = FALSE, warning = FALSE}
+
 # i.e. the geom_point to derive the most active or laziest wildboar
 ggplot(data = ws_newyear_steplength_mean, aes(datetime_round, steplength_mean, colour=TierName)) + geom_point()
 
@@ -554,6 +560,7 @@ Wildboar_brave_list_plot
 ```
 
 ```{r message = FALSE, warning = FALSE}
+
 # Ranking brave
 Wildboar_brave_rank <- Wildboar_brave_list %>%
   group_by(TierName) %>%
@@ -571,7 +578,7 @@ kable(Wildboar_brave_rank, col.names = gsub("[_]", " ", names(Wildboar_brave_ran
 # Ranking fearful
 Wildboar_fearful_rank <- Wildboar_brave_list %>%
   group_by(TierName) %>%
-  filter(Human_Influence_Areas == "Nature") %>%
+  filter(Human_Influence_Areas == "Natural Habitats") %>%
   arrange(desc(time_of_stay_percent))
 Wildboar_fearful_rank$Rank <- 1:nrow(Wildboar_fearful_rank)
 Wildboar_fearful_rank$Tier_Name <- Wildboar_fearful_rank$TierName
