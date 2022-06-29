@@ -6,20 +6,31 @@ author: "Authors: Jonas Michael Windisch and Johannes Quente"
 date: "Submission Date: 03.07.2022"
 output:
   html_document:
-    theme: flatly
+    theme: journal
     highlight: tango
     toc: true
     toc_float: true
     code_download: true
     output_dir: "docs"
     code_folding: show
+
 ---
+
 
 <style>
 body {
-text-align: justify}
+text-align: justify;font-size: 17spx; line-height: 1.75em}
+  }
 </style>
 
+<style>
+#TOC {
+  background: url("https://sges.ch/wp-content/uploads/2018/07/zhaw-iunr-logo.png");
+  background-size: contain;
+  padding-top: 250px !important;
+  background-repeat: no-repeat;
+}
+</style>
 
 ## Abstract
 
@@ -33,14 +44,16 @@ In recent decades, an expansion and increase of wild boar (*Sus scrofa*) populat
 
 Wild boar damage to croplands is expressed in different ways: direct consumption of crops, rooting in search of bulbs, invertebrates or tubers, seed removal, trampling and damage to agricultural infrastructure (Barrios-García & Ballari 2012). Therefore, it is important to know their activity patterns and where and when the wild boars are in order to take countermeasures.
 
-The research question been asked is: How can the different environments (settlements, streets and different land use categories) been contextualized with the activity-patterns of the wild boar-data. How can this be conceptualized, modeled and further implemented in suitable visualizations to show behavioral patterns given to a certain environmental context and help to answer questions like “What does wild boar fear?” or “What are the behavioral constraints of wild boars?”.
+The research question been asked is: How can the different environments (settlements, streets and different land use categories) been contextualized with the activity-patterns of the wild boars. How can this be conceptualized, modeled and further implemented in suitable visualizations to show behavioral patterns given to a certain environmental context and help to answer questions like “What does wild boar fear?” or “What are the behavioral constraints of wild boars?”.
 
 
 ## Material and Methods
 
-For this project we needed the following data: wild boar data are given by the course administration of Patterns & Trends in Environmental Data, ZHAW, orthoimages & map are given by swisstopo (open access) and the spatial data are  given by geovite.ethz.ch (open access). An overview over the used data is given in tabel 1.
+### Data Aquision and Preprosessing
 
-```{r}
+For this project we needed the following data: wild boar data are given by the course administration of Patterns & Trends in Environmental Data, ZHAW, orthoimages & maps are given by swisstopo (open access) and the spatial data are  given by geovite.ethz.ch (open access). An overview over the used data is given in table 1.
+
+```{r message = FALSE, warning = FALSE}
 
 library(knitr)
 
@@ -55,9 +68,9 @@ kable(data_aquisistion, col.names = gsub("[_]", " ", names(data_aquisistion)), c
 
 ```
 
-After loading the necessary libraries and the data acquisition, we converted their different coordinate reference system into a consistent one (CH1903+ / LV95). Then, the data are clipped to the study area with the extension of 2567000/1202000 to 2573000/1207000. The study area is located in the canton of Bern, district Seeland, Commune Gempelen and lies directly on lake Neuchâtel. To reduce the amount of data volume - due to hardware limitation - only 7 of 19 wild boars were taken and the time period from 2014-12-15 until the 2015-01-15 was chosen. The result therefore is rather a simplified way to solve our question but includes all the necessary data to answer our research questions.
+After loading the necessary libraries and the data acquisition in R (version 4.2.1), we converted their different coordinate reference system into a consistent one (CH1903+ / LV95). Then, the data are clipped to the study area with the extension of 2'567000/1'202000 to 2'573000/1'207000 with the function `st_intersection()`. The study area is located in the canton of Bern, district Seeland, Commune Gempelen and is located near the lake Neuchâtel. To reduce the amount of data volume - due to hardware limitation - only 7 of 19 wild boars were taken and the time period from 15.12.2014 until the 15.01.2015 was chosen. The result therefore is rather a simplified way to solve our question but includes all the necessary data to answer our research questions.
 
-```{r message = FALSE, warning = FALSE, echo = FALSE, eval = FALSE}
+```{r message = FALSE, warning = FALSE , results = FALSE, fig.show = 'hide'}
 
 ### Loading Libraries:
 
@@ -109,6 +122,7 @@ TLM_Strassen <- st_transform(TLM_Strassen, crs = st_crs(2056))
 TLM_Eisenbahn <- st_transform(TLM_Eisenbahn, crs = st_crs(2056))
 TLM_Gebaeude <- st_transform(TLM_Gebaeude, crs = st_crs(2056))
 TLM_Freizeitareale <- st_transform(TLM_Freizeitareale, crs = st_crs(2056))
+Study_Area_for_Raster <- st_transform(Study_Area, crs = st_crs(21781))
 
 
 ### Objektart as Numeric:
@@ -120,9 +134,14 @@ TLM_Gebaeude$objektart <- as.numeric(TLM_Gebaeude$objektart)
 TLM_Freizeitareale$objektart <- as.numeric(TLM_Freizeitareale$objektart)
 
 
+### Downsizing Orthophoto
+
+Orthophoto <- aggregate(Orthophoto, fact=2)
+
 ### Clip Data to Study_Area
 
 Wildschwein_sf <- st_intersection(Wildschwein_sf, Study_Area)
+Orthophoto <- crop(x = Orthophoto, y = Study_Area_for_Raster)
 Feldfruechte <- st_intersection(Feldfruechte, Study_Area)
 TLM_Bodenbedeckung <- st_intersection(TLM_Bodenbedeckung, Study_Area)
 TLM_Strassen <- st_intersection(Study_Area, TLM_Strassen)
@@ -138,23 +157,240 @@ Wildschwein_select <- Wildschwein_sf %>%
 
 timespan <- as.numeric(difftime(time1 = "2015-01-15", time2 = "2014-12-15", units = "secs"))
 
+
+### Add Metadata
+### Bodenbedeckung:
+
+objektart <- c(1:15)
+objektart_Beschreibung <- c("Fels", "Fels locker", "Felsbloecke", "Felsbloecke locker", "Fliessgewaesser", "Gebueschwald", "Lockergestein", "Lockergestein locker", "Gletscher", "Stehende Gewaesser", "Feuchtgebiet", "Wald", "Wald offen", "Gehoelzflaeche", "Schneefeld Toteis")
+Attributnamen <- data.frame(objektart, objektart_Beschreibung)
+
+TLM_Bodenbedeckung <-left_join(TLM_Bodenbedeckung, Attributnamen, by = "objektart")
+
+
+### Strassen:
+
+objektart <- c(1:23)
+objektart_Beschreibung <- c("Ausfahrt", "Einfahrt", "Autobahn", "Raststaette", "Verbindung", "Zufahrt", "Dienstzufahrt", "10m Strasse", "6m Strasse", "4m Strasse", "3m Strasse", "Platz", "Autozug", "Faehre", "2m Weg", "1m Weg", "1m Wegfragment", "2m Wegfragment", "Markierte Spur","8m Strasse","Autostrasse","Klettersteig", "Provisorium")
+Attributnamen <- data.frame(objektart, objektart_Beschreibung)
+
+TLM_Strassen <-left_join(TLM_Strassen, Attributnamen, by = "objektart")
+
+
+### Eisenbahn:
+
+objektart <- c(0,2,4,5)
+objektart_Beschreibung <- c("Normalspur", "Schmalspur", "Schmalspur mit Normalspur", "Kleinbahn")
+Attributnamen <- data.frame(objektart, objektart_Beschreibung)
+
+TLM_Eisenbahn <-left_join(TLM_Eisenbahn, Attributnamen, by = "objektart")
+
+
+### Gebaeude:
+
+objektart <- c(0:22)
+objektart_Beschreibung <- c("Gebaeude", "NA", "Hochhaus", "Hochkamin", "Turm", "Kuehlturm", "Lagertank", "Lueftungsschacht", "Offenes Gebaeude", "Treibhaus", "Im Bau", "Kapelle", "Sakraler Turm", "Sakrales Gebaeude", "NA", "Flugdach", "Unterirdisches Gebaeude", "Mauer gross", "Mauer gross gedeckt", "Historische Baute", "NA", "NA", "Verbindungsbruecke")
+Attributnamen <- data.frame(objektart, objektart_Beschreibung)
+
+TLM_Gebaeude <-left_join(TLM_Gebaeude, Attributnamen, by = "objektart")
+
+
+### Freizeitareale:
+
+objektart <- c(0:7)
+objektart_Beschreibung <- c("Campingplatzareal", "Freizeitanlagenareal", "Golfplatzareal", "Pferderennbahnareal", "Schwimmbadareal", "Sportplatzareal", "Standplatzareal", "Zooareal")
+Attributnamen <- data.frame(objektart, objektart_Beschreibung)
+
+TLM_Freizeitareale <-left_join(TLM_Freizeitareale, Attributnamen, by = "objektart")
+
 ```
 
+### The most fearful and the most brave wild boar
+
+To describe the effect of the human influence areas at the activity-patterns of the wild boars, the question was asked: What is the most fearful and the most brave wild boar? The "fearful" wild boar is defined as the animal which avoids urban areas. The "brave" wild boar is the one that ventures closest to settlements. The ranking was based on the time spent in human influence areas as a percentage over the entire study period (31 days). 
+
+To define the human influence areas - such as streets, railway, building and leisure areas - the data sets were first combined by `union()`. Then a buffer zone of 100 m was created around the human influence areas (`buffer()`). This range corresponds to the escape distance of 100 m to 200 m of wild boars given in the literature (Suter et al., 2018; Thurfjell et al. 2013). After joining the wild boar data with the Human Influence Areas Buffers (`st_join()`), the time difference between subsequent rows was calculated with `difftime()`. All categories of the urban areas were combined and named "Human Influence Areas" and all natural environment as "Nature". In Figure 1 a) are all human influence areas in the study area shown and in b) the 100 m buffer zone around the human influence areas.
+
+```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE}
+
+### Combine Human Influence Areas.
+### Geometry Type: Lines
+
+Strassen_kl <- TLM_Strassen[,c("objektart_Beschreibung", "geometry")]
+Eisenbahn_kl <- TLM_Eisenbahn[,c("objektart_Beschreibung", "geometry")]
+
+Lines <- union(Strassen_kl, Eisenbahn_kl)
+Lines <- st_as_sf(Lines)
+
+
+### Geometry Type: Polygons
+
+Gebaeude_kl <- TLM_Gebaeude[,c("objektart_Beschreibung", "geometry")]
+Freizeitareale_kl <- TLM_Freizeitareale[,c("objektart_Beschreibung", "geometry")]
+
+Polygons <- union(Gebaeude_kl, Freizeitareale_kl)
+Polygons <- st_as_sf(Polygons)
+
+
+### Total Human Influence Areas.
+
+Human_Influence_Areas <- union(Lines, Polygons)
+Human_Influence_Areas <- st_as_sf(Human_Influence_Areas)
+
+
+### Create Buffer around Human Influence Areas.
+
+Human_Influence_Areas_Buffer <- st_buffer(x = Human_Influence_Areas, dist = 100)
+
+
+### Plot Human Influence Areas
+
+Human_Influence_Areas_Plot <- tm_shape(shp = Orthophoto) +
+    tm_rgb() +
+  tm_shape(shp = Wildschwein_select) + 
+    tm_dots(col = "TierName") +
+  tm_shape(shp = Human_Influence_Areas) + 
+    tm_polygons(col = "objektart_Beschreibung") +
+    tm_lines(col = "objektart_Beschreibung") +
+  tm_compass(type = "arrow", position = c(0.247,0.028), bg.color = "white", bg.alpha = 0.75, size = 1.8) + 
+  tm_scale_bar(breaks = c(0, 0.25, 0.5, 0.75 ,1), text.size = 0.75, position = c("left", "bottom"), bg.color = "white", bg.alpha = 0.75) +
+  tm_layout(main.title = "a)",
+            main.title.size = 1,
+            legend.title.size = 1,
+            legend.title.color = "white",
+            legend.text.size = 0.6,
+            legend.outside = TRUE,
+            legend.bg.color = "white",
+            legend.bg.alpha = 1)
+
+Human_Influence_Areas_Buffer <- mutate(Human_Influence_Areas_Buffer,Human_Influence_Areas =  "Human Influence Areas")
+  
+Human_Influence_Areas_Buffer_Plot <- tm_shape(shp = Orthophoto) +
+    tm_rgb() +
+  tm_shape(shp = Human_Influence_Areas_Buffer) + 
+    tm_polygons(col = "Human_Influence_Areas", palette = "grey") +
+  tm_shape(shp = Wildschwein_select) +
+    tm_dots(col = "TierName") +
+    tm_compass(type = "arrow", position = c(0.247,0.028), bg.color = "white", bg.alpha = 0.75, size = 1.8) + 
+  tm_scale_bar(breaks = c(0, 0.25, 0.5, 0.75 ,1), text.size = 0.75, position = c("left", "bottom"), bg.color = "white", bg.alpha = 0.75) +
+  tm_layout(main.title = "b)",
+            main.title.size = 1,
+            legend.title.size = 1,
+            legend.title.color = "white",
+            legend.text.size = 0.6,
+            legend.outside = TRUE,
+            legend.bg.color = "white",
+            legend.bg.alpha = 1)
+
+
+### most fearful/brave wild boar
+
+Wildboar_brave <- st_join(x = Wildschwein_select, y = Human_Influence_Areas_Buffer)
+
+Wildboar_brave$objektart_Beschreibung <- replace_na(data = Wildboar_brave$objektart_Beschreibung, replace = "Wald&Wiesen&Natur")
+
+Wildboar_brave <- mutate(Wildboar_brave, Human_Influence_Areas = if_else(objektart_Beschreibung == "Wald&Wiesen&Natur", "Nature", "Human_Influence_Areas"))
+
+Wildboar_brave <- st_drop_geometry(Wildboar_brave)
+
+Wildboar_brave <- mutate(Wildboar_brave,time_of_stay = as.integer(difftime(time1 = lead(DatetimeUTC), time2 = DatetimeUTC), units = "secs"))
+
+Wildboar_brave <- Wildboar_brave[,c("TierName", "objektart_Beschreibung", "time_of_stay", "Human_Influence_Areas")]
+
+Wildboar_brave_list <-  Wildboar_brave %>%
+  filter(time_of_stay >0) %>%
+  group_by(TierName, Human_Influence_Areas) %>%
+  summarise(time_of_stay_s = sum(time_of_stay)) %>%
+  mutate(time_of_stay_percent = (time_of_stay_s/timespan)*100)
+
+```
+
+```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE, fig.cap = "Figure 1: a) all human influence areas in the study area; b) the 100 m buffer zone around the human influence areas."}
+
+Human_Influence_Areas_Plot
+Human_Influence_Areas_Buffer_Plot
+
+```
+
+### Where wild boars stay
+
+xxx
+
+
 ## Results
+
+### The most fearful and the most brave wild boar
+
+The effect of the human influence areas at the activity-patterns of the wild boars is shown in Figure 2. The duration of stay in urban areas is different for each animal. It is clearly seen, that the wild boars "Sabine" and "Ruth" venture closest to settlements. Whereas "Isabelle" and "Rosa" avoid the human influence areas and and prefer to stay in nature. The exact values and the ranking for each wild boar are given in table 2 & 3.
+
+```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE, fig.cap = "Figure 2: Time stay in human influence areas and nature as a percentage over the entire study period (31 days) of the seven wild boars."}
+
+# Plot
+Wildboar_brave_list_plot <- ggplot(Wildboar_brave_list, aes(x = TierName, y = time_of_stay_percent, fill = Human_Influence_Areas)) +
+  geom_col() +
+  theme_classic() +
+  labs(y = "Duration of Stay [%]", x = "Wild Boar Name") +
+  guides(fill=guide_legend(title="Land Type")) +
+  scale_fill_manual(values = c("grey", "darkolivegreen3"))
+Wildboar_brave_list_plot
+
+```
+
+```{r message = FALSE, warning = FALSE}
+# Ranking brave
+Wildboar_brave_rank <- Wildboar_brave_list %>%
+  group_by(TierName) %>%
+  filter(Human_Influence_Areas == "Human_Influence_Areas") %>%
+  arrange(desc(time_of_stay_percent))
+Wildboar_brave_rank$Rank <- 1:nrow(Wildboar_brave_rank)
+Wildboar_brave_rank$Tier_Name <- Wildboar_brave_rank$TierName
+Wildboar_brave_rank$Duration_of_Stay <- Wildboar_brave_rank$time_of_stay_percent
+Wildboar_brave_rank <- Wildboar_brave_rank[,c("Tier_Name", "Duration_of_Stay", "Rank")]
+Wildboar_brave_rank$Duration_of_Stay <- round(Wildboar_brave_rank$Duration_of_Stay, digits = 0)
+
+kable(Wildboar_brave_rank, col.names = gsub("[_]", " ", names(Wildboar_brave_rank)), caption = "Table 2: The exact values and the ranking for the brave wild boar (Duration of Stay in Percent)")
+
+
+# Ranking fearful
+Wildboar_fearful_rank <- Wildboar_brave_list %>%
+  group_by(TierName) %>%
+  filter(Human_Influence_Areas == "Nature") %>%
+  arrange(desc(time_of_stay_percent))
+Wildboar_fearful_rank$Rank <- 1:nrow(Wildboar_fearful_rank)
+Wildboar_fearful_rank$Tier_Name <- Wildboar_fearful_rank$TierName
+Wildboar_fearful_rank$Duration_of_Stay <- Wildboar_fearful_rank$time_of_stay_percent
+Wildboar_fearful_rank <- Wildboar_fearful_rank[,c("Tier_Name", "Duration_of_Stay", "Rank")]
+Wildboar_fearful_rank$Duration_of_Stay <- round(Wildboar_fearful_rank$Duration_of_Stay, digits = 0)
+
+kable(Wildboar_fearful_rank, col.names = gsub("[_]", " ", names(Wildboar_fearful_rank)), caption = "Table 2: The exact values and the ranking for the fearful wild boar (Duration of Stay in Percent)")
+
+```
+
+### Where wild boars stay
 
 xxx
 
 
 ## Discussion
 
-xxx
+- present the results of your study and discuss them in the light of your research questions. What
+have you achieved and what would be further steps for future research?
+- report problems and limitations you encountered along the way and the solutions you chose to
+overcome these, be it limitations with respect to the data sources, the tools or any other source of
+limitation.
+- discuss your data science choices in the light of the theory covered in the lectures, group works,
+and your reading assignments.
 
 
 ## Bibliography
 
-M. Noelia Barrios-Garcia, Sebastian A. Ballari, "Impact of wild boar (Sus scrofa) in its introduced and native range: a review", Biol Invasions, vol, 14, pp. 2283–2300, 2012,             https://link.springer.com/content/pdf/10.1007/s10530-012-0229-6.pdf.
+M. Noelia Barrios-Garcia, Sebastian A. Ballari, "Impact of wild boar (Sus scrofa) in its introduced and native range: a review", Biol Invasions, vol, 14, pp. 2283–2300, 2012,  https://link.springer.com/content/pdf/10.1007/s10530-012-0229-6.pdf.
 
-X. J. Meng, D. S. Lindsay, and N. Sriranganathan, "Wild boars as sources for infectious diseases in livestock and humans", Philosophical Transactions of the Royal Society B: Biological Sciences, vol. 364, no. 1530, pp. 2697–2707, 2009,             https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2865094/pdf/rstb20090086.pdf.
+X. J. Meng, D. S. Lindsay, and N. Sriranganathan, "Wild boars as sources for infectious diseases in livestock and humans", Philosophical Transactions of the Royal Society B: Biological Sciences, vol. 364, no. 1530, pp. 2697–2707, 2009,  https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2865094/pdf/rstb20090086.pdf.
 
-Anneleen Rutten, Jim Casaer, Diederik Strubbe and Herwig Leirs, "Agricultural and landscape factors     related to increasing wild boar agricultural damage in a highly anthropogenic landscape", Wildlife     Biology, vol. 2020, no. 1, pp. 1-11, 2020, https://onlinelibrary.wiley.com/doi/pdf/10.2981/wlb.00634.
+Anneleen Rutten, Jim Casaer, Diederik Strubbe and Herwig Leirs, "Agricultural and landscape factors related to increasing wild boar agricultural damage in a highly anthropogenic landscape", Wildlife Biology, vol. 2020, no. 1, pp. 1-11, 2020, https://onlinelibrary.wiley.com/doi/pdf/10.2981/wlb.00634.
+
+Henrik Thurfjell, Göran Spong & Göran Ericsson, "Effects of hunting on wild boar Sus scrofa behaviour", Wildlife Biology, vol. 2020, no. 19, pp. 87-93, 2020, https://bioone.org/journals/wildlife-biology/volume-19/issue-1/12-027/Effects-of-hunting-on-wild-boar-Sus-scrofa-behaviour/10.2981/12-027.pdf.
+
+Suter Stefan, Sandro Stoller & Benjamin Sigrist, "Prävention von Wildschweinschäden in der Landwirtschaft und Management von Wildschweinen in Schutzgebieten", Schlussbericht, 2018, https://www.zhaw.ch/storage/hochschule/medien/bildmaterial/Schlussbericht_Wildschweinschreck.pdf.
 
