@@ -34,7 +34,7 @@ text-align: justify;font-size: 17spx; line-height: 1.75em}
 
 ## Abstract
 
-The threat of wild boar in cultural sites are becoming a greater problem in recent years. The understanding of wild boar activity patterns is therefore of use. Using the data of wild boar movement from 15.12.2014 until the 15.01.2015 has been evaluated in the following manner: Different environments like (settlements, streets and different land use categories) have been contextualized and rankings have been derived answering questions like “What does a wild boar fear?” and “What are the behavioral constraints of wild boars?”. Further we answered questions like what is the most active, laziest and the most adventurous wild boar. We further derived semi scientific psychological patterns on the individual level to conduct rankings based on the answered questions.
+The threat of wild boar in cultural sites is becoming a greater problem in recent years. The understanding of wild boar activity patterns is therefore of use. Using the data of wild boar movement from 15.12.2014 until the 15.01.2015 has been evaluated in the following manner: Different environments like (settlements, streets and different land use categories) have been contextualized and rankings have been derived answering questions like “What does a wild boar fear?” and “What are the behavioral constraints of wild boars?”. Further we answered questions like what is the most active, laziest and the most adventurous wild boar. Therefore we derived semi scientific psychological patterns on the individual level to conduct rankings based on the answered questions.
 
 
 ## Introduction
@@ -207,15 +207,13 @@ TLM_Freizeitareale <-left_join(TLM_Freizeitareale, Attributnamen, by = "objektar
 
 ### The most active or laziest wild  boar
 
-Deriving Speed in order to derive a proxy of the most active or laziest wild boar
-Deriving another proxy: net displacent
-In this case to decided to derive the mean speed and mean displacement in one day intervals 
+In order to find the most active, laziest or most adventurous individual we derived the speed variable in order to find a proxy of the most active or laziest wild boar. Further we thought about another proxy of activeness: The net displacement to find the most adventurous individual. In this case to decided to derive the mean speed and mean displacement per one day intervals. In order to accomplish this task:
 
 1. We roundet the date by days
 2. We grouped by TierName and datetime_round
 3. We derived the mean speed and displacement
 
-in this case without the geometry because of the reduced computational effort
+In this case without the geometry because of the reduced computational effort.
 
 ```{r message = FALSE, warning = FALSE , results = FALSE, fig.show = 'hide'}
 
@@ -267,9 +265,10 @@ ws_newyear_net_displacement %>%
 ```
 
 
-### Moving window approach
+### Moving Window Approach
 
-The Moving window approach in order to reduce noise of the data might be another approach to analyse i.e. speed_mean but was not further been elaborated in this project. The idea is to sum up in this case six and five mean variables like speed_mean to smooth out  movement peeks over the given timeperiod. This allows to visualize the movement patterns in a more trend driven way.
+The idea behind the “Moving Window Approach” is to reduce the noise (fluctuation) of the data. It therefore might be another approach to analyze i.e. the speed_mean variable but was not been further elaborated in this project. The principal idea therefore is to sum up (in this case six and five) variables like speed_mean to smooth out movement peeks over the given time period with the rollmean function from the zoo package. This allows to visualize the movement patterns in a more trend driven way. Another idea would have been to derive the rollmean of the individuals and compare the overall movement trends among each individual. This was not further been elaborated because of the following more aesthetic and better working approaches.
+
 
 ```{r message = FALSE, warning = FALSE , results = FALSE}
 # Here we can see the overall movements of the seven wild boar in a smooth out way (derived by the rollmean function) and the original speedmean.
@@ -282,7 +281,7 @@ ws_newyear_speed_mean %>%
   #geom_point(aes(y = speed_mean)) +
   geom_line(aes(y = rollmean, colour = "rollmean")) 
 
-# An idea would have been to derive the rollmean of the individuals and compare them among each other.
+# The individual approach in order to possibly compare them among each other. In this case all combined in one line-graph.
 # i.e.:
 ws_newyear_speed_mean %>% 
   head(37) %>%
