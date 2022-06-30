@@ -211,7 +211,8 @@ In order to find the most active, laziest or most adventurous individual we deri
 
 1. We roundet the date by days
 2. We grouped by TierName and datetime_round
-3. We derived the mean speed and displacement
+3. We derived the mean speed and displacement by calculating mean speed, steplenght and net displacement
+4. Plotting with geom_tile , Y = TierName , X = mean hours of the day , fill = mean speed / steplenght / net displacement
 
 In this case without the geometry because of the reduced computational effort.
 
@@ -270,7 +271,7 @@ ws_newyear_net_displacement %>%
 The idea behind the “Moving Window Approach” is to reduce the noise (fluctuation) of the data. It therefore might be another approach to analyze i.e. the speed_mean variable but was not been further elaborated in this project. The principal idea therefore is to sum up (in this case six and five) variables like speed_mean to smooth out movement peeks over the given time period with the rollmean function from the zoo package. This allows to visualize the movement patterns in a more trend driven way. Another idea would have been to derive the rollmean of the individuals and compare the overall movement trends among each individual. This was not further been elaborated because of the following more aesthetic and better working approaches.
 
 
-```{r message = FALSE, warning = FALSE , results = FALSE}
+```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE}
 # Here we can see the overall movements of the seven wild boar in a smooth out way (derived by the rollmean function) and the original speedmean.
 
 ws_newyear_speed_mean %>% 
@@ -448,19 +449,9 @@ Wildboar_LandCover_Plot
 
 ### The most active / laziest and most adventurous wild boar
 
-First:      Calculating Mean Steplengh
-, Second:     Plotting with geom_tile 
-, Y =         TierName
-, X =         mean hours of the day
-, fill =      steplegth
+The following are the core result of the question answered: which is the most active / laziest  and the most adventurous wild boar. The interpretation is still a vage idea of what "active" / "laziest" means but in this project we defined it as the most active wildboar over a certain time period. The results show clear "winners" and "loosers" when having a look on the mean_speed, mean_steplength and mean_net_displacement over the evaluated timeperiod. We interpreted the results in the way that in our point of view the wildboar with the highest steplength, speed or net displacement has been evaluated as the most active wild boar and vice versa. In order to backup these findings we also derived the overall mean speed and net displacement of each individual to back up our results and therefore finding the overall most active / laziest  and the most adventurous wild boar.
 
-
-Core result of the question answered: which is the most active / laziest wildboar and most adventurous wild boar. The interpretation is still a vage idea of what "active" / "laziest" means but in thsi project we defined it as the most active wildboar over a certain timeperiod. The results show clear "winners" and "loosers" when having a look on the mean_speed and mean_net_displacement over the evaluated timeperiod. We interpreted the results in the way that in our point of view the wildboar with the highest steplength, speed or netto displacement got evaluated as the most active wild boar and vice versa. In order to backup that we also derived the overall mean speed and netdisplacement of the individuals in order back up our hypothesis and therefore finding the most adventurous wild boar.
-
-Different visualization approaches might be even more useful in order to derive the real overall "laziness" or "activeness"
-
-
-```{r message = FALSE, warning = FALSE}
+```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE}
 
 # steplength_mean
 
@@ -492,10 +483,10 @@ View(ws_newyear_net_displacement)
 ``` 
 
 
-Different visualization approaches might be even more useful in order to derive the real overall "laziness" or "activeness"
+We also tried different visualization approaches in order to find the most useful ones to derive the overall "laziness" or "activeness".
 
 
-```{r message = FALSE, warning = FALSE}
+```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE}
 
 # i.e. the geom_point to derive the most active or laziest wildboar
 ggplot(data = ws_newyear_steplength_mean, aes(datetime_round, steplength_mean, colour=TierName)) + geom_point()
@@ -515,12 +506,16 @@ geom_boxplot()
 
 ggplot(data = ws_newyear_net_displacement, aes(x=TierName, y = net_displacement)) +
 geom_boxplot()
+```
 
-# These boxplots show the overall mean proxies of our indicator like speed /  steplength and net displacement of the individuals and are therefore are clearly the most adequate ways to visualize the overall activeness.The overall winner therefore seems to be the individual Fritz whereas he has the highest mean speed, steplength and net displacement over the hole timeperiod chosen.The overall most laziest wildboar therefore seems to be the wildboar indivual Sabine.
 
 
-# This can also be expressed in numbers:
+These boxplots show the overall mean proxies of our indicator like speed /  steplength and net displacement of the individuals and are therefore are clearly the most adequate way to visualize the overall activeness.The overall winner therefore seems to be the individual Fritz whereas he has the highest mean speed, steplength and net displacement over the hole timeperiod chosen. The overall most laziest wildboar therefore seems to be the wildboar indivual Sabine.
 
+This can also be expressed in numbers:
+
+
+```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE}
 ws_newyear_speed %>%
   group_by(TierName) %>%
   subset(select=-c(E,N)) %>%
@@ -535,10 +530,8 @@ ws_newyear_steplength %>%
 ws_newyear_net_displacement %>%
   group_by(TierName) %>%
   summarise(mean = mean(net_displacement, na.rm =TRUE))
-
-# Interestingly the last lines of code show a different result whereas according to the overall mean of net displacement the winner seems to be the individual Caroline. We therefore correct our crowning and give the titel of the most adventurous wild boar = therefore most traveled wild boar to the indivual Caroline.
-
 ```
+Interestingly the last lines of code show a different result whereas according to the overall mean of net displacement the winner seems to be the individual Caroline. We therefore correct our crowning and give the titel of the most adventurous wild boar = therefore most traveled wild boar to the indivual Caroline.
 
 
 ### The most fearful and the most brave wild boar
