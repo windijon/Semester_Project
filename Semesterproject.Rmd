@@ -624,6 +624,12 @@ The interpretation of what most "active" / "laziest" or “adventurous” means 
 The Moving window approach in order to reduce noise of the data might have been another approach to analyze i.e. mean speed but was not further been elaborated in this project. The idea was to sum up – in this case six and five over the day mean variables like speed to smooth out movement peeks over the hole given time period of one month. This allows to visualize the movement patterns in a more trend driven way.
 
 
+**Data science choices**
+
+The derivation of speed, steplenght and net displacement has been done according to the theory covered in the lectures.
+
+
+
 
 ## Bibliography
 
