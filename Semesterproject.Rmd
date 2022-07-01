@@ -63,7 +63,7 @@ data_aquisistion <- data.frame(
   Projected_CRS = c("CH1903+ / LV95", "CH1903 / LV03", "CH1903 / LV03", "WGS 84", "CH1903 / LV03", "CH1903 / LV03", "CH1903 / LV03", "CH1903 / LV03")
 )
 
-kable(data_aquisistion, col.names = gsub("[_]", " ", names(data_aquisistion)), caption = "Table 1: Overwiev of the used data for this project")
+kable(data_aquisistion, col.names = gsub("[_]", " ", names(data_aquisistion)), caption = "Table 1: Overwiev of the used data for this project.")
 
 ```
 
@@ -85,6 +85,8 @@ library(SimilarityMeasures)
 library(lubridate)
 library(tidyr)
 library(knitr)
+library(zoo)
+library(data.table)
 
 ### Data Import:
 
@@ -207,14 +209,13 @@ TLM_Freizeitareale <-left_join(TLM_Freizeitareale, Attributnamen, by = "objektar
 
 ### The most active or laziest wild  boar
 
-In order to find the most active, laziest or most adventurous individual we derived the speed variable in order to find a proxy of the most active or laziest wild boar. Further we thought about another proxy of activeness: The net displacement to find the most adventurous individual. In this case to decided to derive the mean speed and mean displacement per one day intervals. In order to accomplish this task:
+In order to find the most active, laziest or most adventurous individual, we derived the speed variable in order to find a proxy of the most active or laziest wild boar. Further we thought about another proxy of activeness: The net displacement to find the most adventurous individual over the entire study period (31 days). In this case to decided to derive the mean speed and mean displacement per one day intervals. In order to accomplish this task:
 
-1. We roundet the date by days
-2. We grouped by TierName and datetime_round
-3. We derived the mean speed and displacement by calculating mean speed, steplenght and net displacement
-4. Plotting with geom_tile , Y = TierName , X = mean hours of the day , fill = mean speed / steplenght / net displacement
-
-In this case without the geometry because of the reduced computational effort.
+1. We rounded the date by days.
+2. We grouped by "TierName" and "datetime_round".
+3. We derived the speed and displacement by calculating mean speed (km/hours), step length (m/day) and net displacement (m/day).
+4. Ranked each speed variable seperatly and from this the overall ranking with equal weighting was calculated. 
+5. Plotting the results with `geom_tile()`.
 
 ```{r message = FALSE, warning = FALSE , results = FALSE, fig.show = 'hide'}
 
@@ -268,27 +269,38 @@ ws_newyear_net_displacement %>%
 
 ### Moving Window Approach
 
-The idea behind the “Moving Window Approach” is to reduce the noise (fluctuation) of the data. It therefore might be another approach to analyze i.e. the speed_mean variable but was not been further elaborated in this project. The principal idea therefore is to sum up (in this case six and five) variables like speed_mean to smooth out movement peeks over the given time period with the rollmean function from the zoo package. This allows to visualize the movement patterns in a more trend driven way. Another idea would have been to derive the rollmean of the individuals and compare the overall movement trends among each individual. This was not further been elaborated because of the following more aesthetic and better working approaches.
+The idea behind the “Moving Window Approach” is to reduce the noise (fluctuation) of the data. It therefore might be another approach to analyze i.e. the mean speed variable but was not been further elaborated in this project. The principal idea therefore is to sum up (in this case six and five) variables like mean speed to smooth out movement peeks (roll mean) over the given time period with the `rollmean()` function from the zoo package. This allows to visualize the movement patterns in a more trend driven way (Figure 1). Another idea would have been to derive the roll-mean of the individuals and compare the overall movement trends among each individual. This was not further been elaborated because of the following more aesthetic and better working approaches.
 
+```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE, fig.cap = "Figure 1: a) Moving Window Approach reduce the noise in the mean speed; b) Individual Approach."}
 
-```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE}
 # Here we can see the overall movements of the seven wild boar in a smooth out way (derived by the rollmean function) and the original speedmean.
 
-ws_newyear_speed_mean %>% 
+speed_mean <- ws_newyear_speed_mean %>% 
   head(100) %>%
-  mutate(rollmean = zoo::rollmean(speed_mean, 6, fill = NA, align = "center")) %>%
-  ggplot(aes(datetime_round)) +
-  geom_line(aes(y = speed_mean, colour = "speedmean")) +
-  #geom_point(aes(y = speed_mean)) +
-  geom_line(aes(y = rollmean, colour = "rollmean")) 
+  mutate(rollmean = zoo::rollmean(speed_mean, 6, fill = NA, align = "center"))
+
+speed_mean_long <- melt(setDT(speed_mean), id.vars = c("TierName","datetime_round"), variable.name = c("Mean"))
+
+speed_mean_Plot <- ggplot(speed_mean_long, aes(x = datetime_round, y = value, color = Mean)) +
+  geom_line() +
+  theme_classic() +
+  labs(y = "Speed [km/h]", x = "Time") +
+  guides(color = guide_legend(title = "Analyse Approach")) +
+  scale_color_discrete(labels = c("Mean Speed", "Moving Window Approach"))
+speed_mean_Plot
+
 
 # The individual approach in order to possibly compare them among each other. In this case all combined in one line-graph.
 # i.e.:
-ws_newyear_speed_mean %>% 
+individual <- ws_newyear_speed_mean %>% 
   head(37) %>%
-  mutate(rollmean = zoo::rollmean(speed_mean, 5, fill = NA, align = "center")) %>%
-  ggplot(aes(datetime_round)) +
-  geom_line(aes(y = rollmean, colour = "TierName"))
+  mutate(rollmean = zoo::rollmean(speed_mean, 5, fill = NA, align = "center"))
+
+individual_Plot <- ggplot(individual, aes(x = datetime_round, y = rollmean, color = "TierName")) +
+  geom_line() +
+  theme_classic() +
+  labs(y = "Roll Mean [km/h]", x = "Time")
+individual_Plot
 
 ```
 
@@ -297,7 +309,7 @@ ws_newyear_speed_mean %>%
 
 To describe the effect of the human influence areas at the activity-patterns of the wild boars, the question was asked: What is the most fearful and the most brave wild boar? The "fearful" wild boar is defined as the animal which avoids urban areas. The "brave" wild boar is the one that ventures closest to settlements. The ranking was based on the time spent in human influence areas as a percentage over the entire study period (31 days). 
 
-To define the human influence areas - such as streets, railway, building and leisure areas - the data sets were first combined by `union()`. Then a buffer zone of 100 m was created around the human influence areas (`buffer()`). This range corresponds to the escape distance of 100 m to 200 m of wild boars given in the literature (Suter et al., 2018; Thurfjell et al. 2013). After joining the wild boar data with the Human Influence Areas Buffers (`st_join()`), the time difference between subsequent rows was calculated with `difftime()`. All categories of the urban areas were combined and named "Human Influence Areas" and all natural environment as "Nature". In Figure 1 a) are all human influence areas in the study area shown and in b) the 100 m buffer zone around the human influence areas.
+To define the human influence areas - such as streets, railway, building and leisure areas - the data sets were first combined by `union()`. Then a buffer zone of 100 m was created around the human influence areas (`buffer()`). This range corresponds to the escape distance of 100 m to 200 m of wild boars given in the literature (Suter et al., 2018; Thurfjell et al. 2013). After joining the wild boar data with the Human Influence Areas Buffers (`st_join()`), the time difference between subsequent rows was calculated with `difftime()`. All categories of the urban areas were combined and named "Human Influence Areas" and all natural environment as "Nature". In Figure 2 a) are all human influence areas in the study area shown and in b) the 100 m buffer zone around the human influence areas.
 
 ```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE}
 
@@ -377,7 +389,7 @@ Wildboar_brave <- st_join(x = Wildschwein_select, y = Human_Influence_Areas_Buff
 
 Wildboar_brave$objektart_Beschreibung <- replace_na(data = Wildboar_brave$objektart_Beschreibung, replace = "Wald&Wiesen&Natur")
 
-Wildboar_brave <- mutate(Wildboar_brave, Human_Influence_Areas = if_else(objektart_Beschreibung == "Wald&Wiesen&Natur", "Natural Habitats", "Human_Influence_Areas"))
+Wildboar_brave <- mutate(Wildboar_brave, Human_Influence_Areas = if_else(objektart_Beschreibung == "Wald&Wiesen&Natur", "Natural Habitats", "Human Influence Areas"))
 
 Wildboar_brave <- st_drop_geometry(Wildboar_brave)
 
@@ -393,7 +405,7 @@ Wildboar_brave_list <-  Wildboar_brave %>%
 
 ```
 
-```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE, fig.cap = "Figure 1: a) all human influence areas in the study area; b) the 100 m buffer zone around the human influence areas."}
+```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE, fig.cap = "Figure 2: a) all human influence areas in the study area; b) the 100 m buffer zone around the human influence areas."}
 
 Human_Influence_Areas_Plot
 Human_Influence_Areas_Buffer_Plot
@@ -402,9 +414,9 @@ Human_Influence_Areas_Buffer_Plot
 
 ### Where wild boars stay
 
-To describe the preferred locations - such as forest, water bodies, wetlands and farmland - the wild boar data and the land cover data were first joined by `st_join()`. Then the time difference between subsequent rows was calculated with `difftime()`. The classification was based on the time spent in the preferred locations as a percentage over the entire study period (31 days). In Figure 2 are all land cover types in the study area shown.
+To describe the preferred locations - such as forest, water bodies, wetlands and farmland - the wild boar data and the land cover data were first joined by `st_join()`. Then the time difference between subsequent rows was calculated with `difftime()`. The classification was based on the time spent in the preferred locations as a percentage over the entire study period (31 days). In Figure 3 are all land cover types in the study area shown.
 
-```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE, fig.cap = "Figure 2: Land cover types in the study area."}
+```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE, fig.cap = "Figure 3: Land cover types in the study area."}
 
 Wildboar_Bodenbedeckung <- st_join(x = Wildschwein_select, y = TLM_Bodenbedeckung)
 
@@ -447,28 +459,32 @@ Wildboar_LandCover_Plot
 
 ## Results
 
-### The most active / laziest and most adventurous wild boar
+### The most active or laziest wild boar
 
-The following are the core result of the question answered: which is the most active / laziest  and the most adventurous wild boar. The interpretation is still a vage idea of what "active" / "laziest" means but in this project we defined it as the most active wildboar over a certain time period. The results show clear "winners" and "loosers" when having a look on the mean_speed, mean_steplength and mean_net_displacement over the evaluated timeperiod. We interpreted the results in the way that in our point of view the wildboar with the highest steplength, speed or net displacement has been evaluated as the most active wild boar and vice versa. In order to backup these findings we also derived the overall mean speed and net displacement of each individual to back up our results and therefore finding the overall most active / laziest  and the most adventurous wild boar.
+The following are the core result of the question answered: which is the most active / laziest  and the most adventurous wild boar. The results show clear "winners" and "losers" when having a look on the mean speed, mean step length and mean net displacement over the evaluated time period. We interpreted the results in the way, that the wild boar with the highest step length, speed or net displacement has been evaluated as the most active wild boar and vice versa. In order to support these findings, we also derived the overall mean speed and net displacement of each individual to back up our results and therefore finding the overall most active/laziest  and the most adventurous wild boar.
 
-```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE}
-
-# steplength_mean
-
-ws_newyear_steplength_mean %>%
-count(datetime_round, TierName) %>%
-ggplot(mapping = aes(x = datetime_round, y = TierName)) +
-geom_tile(mapping = aes(fill = ws_newyear_steplength_mean$steplength_mean)) 
-
+```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE, fig.cap = "Figure 4: a) Mean Speed; b) Mean Step Length; c) Net Displacement of the seven wild boars during the day (study period: 31 days)."}
 
 # speed_mean
 
 ws_newyear_speed_mean %>%
 count(datetime_round, TierName) %>%
 ggplot(mapping = aes(x = datetime_round, y = TierName)) +
-geom_tile(mapping = aes(fill = ws_newyear_speed_mean$speed_mean)) 
+  geom_tile(mapping = aes(fill = ws_newyear_speed_mean$speed_mean)) +
+  theme_classic() +
+  labs(title = "a)", y = "Wild Boar Name", x = "Time") +
+  scale_fill_gradient(name = "Mean Speed [km/h]", low = "lightsalmon", high = "firebrick", na.value = "white")
 
-View(ws_newyear_speed_mean)
+
+# steplength_mean
+
+ws_newyear_steplength_mean %>%
+count(datetime_round, TierName) %>%
+ggplot(mapping = aes(x = datetime_round, y = TierName)) +
+  geom_tile(mapping = aes(fill = ws_newyear_steplength_mean$steplength_mean)) +
+  theme_classic() +
+  labs(title = "b)", y = "Wild Boar Name", x = "Time") +
+  scale_fill_gradient(name = "Mean Step Length [m/day]", low = "lightsalmon", high = "firebrick", na.value = "white")
 
 
 #net displacement
@@ -476,69 +492,84 @@ View(ws_newyear_speed_mean)
 ws_newyear_net_displacement %>%
 count(datetime_round, TierName) %>%
 ggplot(mapping = aes(x = datetime_round, y = TierName)) +
-geom_tile(mapping = aes(fill = ws_newyear_net_displacement$net_displacement)) 
-
-View(ws_newyear_net_displacement)
+  geom_tile(mapping = aes(fill = ws_newyear_net_displacement$net_displacement)) +
+  theme_classic() +
+  labs(title = "c)", y = "Wild Boar Name", x = "Time") +
+  scale_fill_gradient(name = "Net Displacement [m/day]", low = "lightsalmon", high = "firebrick", na.value = "white")
 
 ``` 
 
 
-We also tried different visualization approaches in order to find the most useful ones to derive the overall "laziness" or "activeness".
+The box plots in Figure 5 show the overall means of our indicators like speed/step length and net displacement of the individuals. According to the overall mean of net displacement, the winner seems to be the individual "Caroline." However, the overall winner therefore is the individual "Fritz" whereas he has the highest mean speed, step length and 2end biggest net displacement over the hole time period. The overall most laziest wild boar therefore seems to be the individual Sabine. The exact values are given in Table 2.
 
-
-```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE}
-
-# i.e. the geom_point to derive the most active or laziest wildboar
-ggplot(data = ws_newyear_steplength_mean, aes(datetime_round, steplength_mean, colour=TierName)) + geom_point()
-
-
-# An alternative of the geom_tile visualization approach which basically does not show anything new.
-# A more interesting visualization approach seems to be the use of the geom_boxplot:
-  
+```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE, fig.cap = "Figure 5: a) Mean Speed; b) Mean Step Length; c) Net Displacement of the seven wild boars overall the study period (31 days)."}
 
 ggplot(data = ws_newyear_speed_mean, aes(x=TierName, y = speed_mean)) +
-geom_boxplot()
+  geom_boxplot() +
+  theme_classic() +
+  labs(title = "a)", y = "Mean Speed [km/h]", x = "Time")
 
 
 ggplot(data = ws_newyear_steplength_mean, aes(x=TierName, y = steplength_mean)) +
-geom_boxplot()
+  geom_boxplot() +
+  theme_classic() +
+  labs(title = "b)", y = "Mean Step Length [m/day]", x = "Time")
 
 
 ggplot(data = ws_newyear_net_displacement, aes(x=TierName, y = net_displacement)) +
-geom_boxplot()
+  geom_boxplot() +
+  theme_classic() +
+  labs(title = "c)", y = "Net Displacement [m/day]", x = "Time")
+
 ```
 
+```{r message = FALSE, warning = FALSE}
 
-
-These boxplots show the overall mean proxies of our indicator like speed /  steplength and net displacement of the individuals and are therefore are clearly the most adequate way to visualize the overall activeness.The overall winner therefore seems to be the individual Fritz whereas he has the highest mean speed, steplength and net displacement over the hole timeperiod chosen. The overall most laziest wildboar therefore seems to be the wildboar indivual Sabine.
-
-This can also be expressed in numbers:
-
-
-```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE}
-ws_newyear_speed %>%
+ranking_speed <- ws_newyear_speed %>%
   group_by(TierName) %>%
   subset(select=-c(E,N)) %>%
-  summarise(mean = mean(speed, na.rm =TRUE))
+  summarise(Mean_Speed = round(mean(speed, na.rm =TRUE), digits = 2)) %>%
+  arrange(desc(Mean_Speed))
+ranking_speed$Rank_speed <- 1:nrow(ranking_speed)
 
-ws_newyear_steplength %>%
+ranking_steplength <- ws_newyear_steplength %>%
   group_by(TierName) %>%
   subset(select=-c(E,N)) %>%
-  summarise(mean = mean(steplength, na.rm =TRUE))
+  summarise(Mean_Step_Length = round(mean(steplength, na.rm =TRUE), digits = 0)) %>%
+  arrange(desc(Mean_Step_Length))
+ranking_steplength$Rank_steplength <- 1:nrow(ranking_steplength)
 
-# !
-ws_newyear_net_displacement %>%
+ranking_displacement <- ws_newyear_net_displacement %>%
   group_by(TierName) %>%
-  summarise(mean = mean(net_displacement, na.rm =TRUE))
+  summarise(Net_Displacement = round(mean(net_displacement, na.rm =TRUE), digits = 0)) %>%
+  arrange(desc(Net_Displacement))
+ranking_displacement$Rank_displacement <- 1:nrow(ranking_displacement)
+
+R1 <- left_join(ranking_speed, ranking_steplength,  by = "TierName")
+
+R2 <- left_join(R1, ranking_displacement,  by = "TierName")
+
+R2 <- R2 %>%
+  group_by(TierName, Mean_Speed, Mean_Step_Length, Net_Displacement) %>%
+  mutate(Rank = Rank_speed + Rank_steplength + Rank_displacement) %>%
+  arrange(Rank)
+
+R2$Wild_Boar_Name <- R2$TierName
+
+Ranking_active <- R2[,c("Wild_Boar_Name", "Mean_Speed", "Mean_Step_Length", "Net_Displacement", "Rank")]
+
+Ranking_active$Rank <-  1:nrow(Ranking_active)
+
+kable(Ranking_active, col.names = gsub("[_]", " ", names(Ranking_active)), caption = "Table 2: The exact values and the ranking for the most active wild boar (Mean Speed [km/h], Mean Step Length [m/day], Net Displacement [m/day]) overall the study period (31 days).")
+
 ```
-Interestingly the last lines of code show a different result whereas according to the overall mean of net displacement the winner seems to be the individual Caroline. We therefore correct our crowning and give the titel of the most adventurous wild boar = therefore most traveled wild boar to the indivual Caroline.
 
 
 ### The most fearful and the most brave wild boar
 
-The effect of the human influence areas at the activity-patterns of the wild boars is shown in Figure 3. The duration of stay in urban areas is different for each animal. It is clearly seen, that the wild boars "Sabine" and "Ruth" venture closest to settlements. Whereas "Isabelle" and "Rosa" avoid the human influence areas and and prefer to stay in nature. The exact values and the ranking for each wild boar are given in table 2 & 3.
+The effect of the human influence areas at the activity-patterns of the wild boars is shown in Figure 4. The duration of stay in urban areas is different for each animal. It is clearly seen, that the wild boars "Sabine" and "Ruth" venture closest to settlements. Whereas "Isabelle" and "Rosa" avoid the human influence areas and and prefer to stay in nature. The exact values and the ranking for each wild boar are given in Table 3 & 4.
 
-```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE, fig.cap = "Figure 3: Time stay in human influence areas and nature as a percentage over the entire study period (31 days) of the seven wild boars."}
+```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE, fig.cap = "Figure 6: Time stay in human influence areas and nature as a percentage over the entire study period (31 days) of the seven wild boars."}
 
 # Plot
 Wildboar_brave_list_plot <- ggplot(Wildboar_brave_list, aes(x = TierName, y = time_of_stay_percent, fill = Human_Influence_Areas)) +
@@ -556,15 +587,16 @@ Wildboar_brave_list_plot
 # Ranking brave
 Wildboar_brave_rank <- Wildboar_brave_list %>%
   group_by(TierName) %>%
-  filter(Human_Influence_Areas == "Human_Influence_Areas") %>%
+  filter(Human_Influence_Areas == "Human Influence Areas") %>%
   arrange(desc(time_of_stay_percent))
+
 Wildboar_brave_rank$Rank <- 1:nrow(Wildboar_brave_rank)
-Wildboar_brave_rank$Tier_Name <- Wildboar_brave_rank$TierName
+Wildboar_brave_rank$Wild_Boar_Name <- Wildboar_brave_rank$TierName
 Wildboar_brave_rank$Duration_of_Stay <- Wildboar_brave_rank$time_of_stay_percent
-Wildboar_brave_rank <- Wildboar_brave_rank[,c("Tier_Name", "Duration_of_Stay", "Rank")]
+Wildboar_brave_rank <- Wildboar_brave_rank[,c("Wild_Boar_Name", "Duration_of_Stay", "Rank")]
 Wildboar_brave_rank$Duration_of_Stay <- round(Wildboar_brave_rank$Duration_of_Stay, digits = 0)
 
-kable(Wildboar_brave_rank, col.names = gsub("[_]", " ", names(Wildboar_brave_rank)), caption = "Table 2: The exact values and the ranking for the brave wild boar (Duration of Stay in Percent)")
+kable(Wildboar_brave_rank, col.names = gsub("[_]", " ", names(Wildboar_brave_rank)), caption = "Table 3: The exact values and the ranking for the brave wild boar (Duration of Stay in Percent).")
 
 
 # Ranking fearful
@@ -572,22 +604,23 @@ Wildboar_fearful_rank <- Wildboar_brave_list %>%
   group_by(TierName) %>%
   filter(Human_Influence_Areas == "Natural Habitats") %>%
   arrange(desc(time_of_stay_percent))
+
 Wildboar_fearful_rank$Rank <- 1:nrow(Wildboar_fearful_rank)
-Wildboar_fearful_rank$Tier_Name <- Wildboar_fearful_rank$TierName
+Wildboar_fearful_rank$Wild_Boar_Name <- Wildboar_fearful_rank$TierName
 Wildboar_fearful_rank$Duration_of_Stay <- Wildboar_fearful_rank$time_of_stay_percent
-Wildboar_fearful_rank <- Wildboar_fearful_rank[,c("Tier_Name", "Duration_of_Stay", "Rank")]
+Wildboar_fearful_rank <- Wildboar_fearful_rank[,c("Wild_Boar_Name", "Duration_of_Stay", "Rank")]
 Wildboar_fearful_rank$Duration_of_Stay <- round(Wildboar_fearful_rank$Duration_of_Stay, digits = 0)
 
-kable(Wildboar_fearful_rank, col.names = gsub("[_]", " ", names(Wildboar_fearful_rank)), caption = "Table 2: The exact values and the ranking for the fearful wild boar (Duration of Stay in Percent)")
+kable(Wildboar_fearful_rank, col.names = gsub("[_]", " ", names(Wildboar_fearful_rank)), caption = "Table 4: The exact values and the ranking for the fearful wild boar (Duration of Stay in Percent).")
 
 ```
 
 
 ### Where wild boars stay
 
-The preferred locations of wild boars are very different and individual. "Sabine" and "Ruth" for example are water-loving, staying mostly in water bodies and wetlands. Whereas "Caroline" and "Fritz" are more in woods and farmlands. Over all, wetlands are the most popular location for every wild boar. The time stay in the land cover types is shown in figure 4.
+The preferred locations of wild boars are very different and individual. "Sabine" and "Ruth" for example are water-loving, staying mostly in water bodies and wetlands. Whereas "Caroline" and "Fritz" are more in woods and farmlands. Over all, wetlands are the most popular location for every wild boar. The time stay in the land cover types is shown in Figure 5.
 
-```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE, fig.cap = "Figure 4: Time stay in the land cover types as a percentage over the entire study period (31 days) of the seven wild boars."}
+```{r message = FALSE, warning = FALSE, results='hide', fig.show = TRUE, fig.cap = "Figure 7: Time stay in the land cover types as a percentage over the entire study period (31 days) of the seven wild boars."}
 
 Wildboar_LandType_Plot <- ggplot(Wildboar_Bodenbedeckung, aes(x = TierName, y = time_of_stay_percent, fill = objektart_Beschreibung)) +
   geom_col() +
@@ -608,7 +641,7 @@ In order to reduce the amount of data we chose 7 individuals over the time perio
 
 The results showed clear "winners" and "losers" when having a look on the mean speed, mean step length and mean net displacement over the evaluated time period. We therefore interpreted the results in the way that the wild boar with the highest step length, speed got evaluated as the most active wild boar and vice versa. The wild boar with the highest net displacement got evaluated as the most adventurous.
 
-The box plots show the overall mean proxies of our indicator like speed /  step length and net displacement of the individuals. They seem to be the most adequate ways to visualize the overall activeness. The overall winner therefore seems to be the individual Fritz whereas he has the highest mean speed, step length and net displacement over the hole time period chosen. The overall laziest wild boar therefore seems to be the wild boar individual Sabine.
+The box plots show the overall mean proxies of our indicator like speed/step length and net displacement of the individuals. They seem to be the most adequate ways to visualize the overall activeness. The overall winner therefore seems to be the individual Fritz whereas he has the highest mean speed, step length and net displacement over the hole time period chosen. The overall laziest wild boar therefore seems to be the wild boar individual Sabine.
 
 Interestingly whereas according to the overall mean of net displacement the winner seems to be the individual Caroline. We therefore added the title of the most adventurous wild boar equaling the most traveled wild boar to the individual Caroline.
 
